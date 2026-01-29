@@ -3,11 +3,15 @@ import api from "../services/api";
 import { Link } from "react-router-dom";
 import Recommendations from "../components/movie/Recommendations";
 import { AuthContext } from "../context/AuthContext";
-import { toast, Toaster } from "react-hot-toast";
+import { toast } from "react-hot-toast";
 import { formatDistanceToNow } from "date-fns";
+import { NotificationContext } from "../context/NotificationContext";
+import { SocketContext } from "../context/SocketContext";
 
 const Home = () => {
   const { user } = useContext(AuthContext);
+  const { setUnreadCount } = useContext(NotificationContext);
+  const socket = useContext(SocketContext);
 
   const [query, setQuery] = useState("");
   const [movies, setMovies] = useState([]);
@@ -25,6 +29,10 @@ const Home = () => {
   const [editText, setEditText] = useState("");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [friends, setFriends] = useState([]);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const [activeMentionInput, setActiveMentionInput] = useState(null); // 'new' or 'edit'
+  const [mentionStartIndex, setMentionStartIndex] = useState(-1);
 
   // 📰 Load friends activity feed
   const fetchFeed = async (pageNum, isLoadMore = false) => {
@@ -48,6 +56,9 @@ const Home = () => {
   useEffect(() => {
     if (user) {
       fetchFeed(1);
+      api.get("/api/friends")
+        .then(res => setFriends(res.data))
+        .catch(err => console.error("Failed to fetch friends", err));
     }
   }, [user]);
 
@@ -93,6 +104,17 @@ const Home = () => {
       setFeed((prev) =>
         prev.map((r) => (r._id === reviewId ? { ...r, likes: res.data.likes } : r))
       );
+
+      // 📡 Emit socket event to notify the owner
+      const review = feed.find(f => f._id === reviewId);
+      if (review.user._id !== user._id) {
+        socket.emit("sendNotification", {
+          recipientId: review.user._id,
+          senderName: user.name,
+          type: "like",
+          movieTitle: review.movieTitle
+        });
+      }
     } catch (err) {
       toast.error("Failed to update like.");
     }
@@ -112,6 +134,30 @@ const Home = () => {
       setFeed((prev) =>
         prev.map((r) => (r._id === reviewId ? { ...r, comments: res.data.comments } : r))
       );
+
+      // 📡 Emit socket event to notify the owner
+      const review = feed.find(f => f._id === reviewId);
+      if (review.user._id !== user._id) {
+        socket.emit("sendNotification", {
+          recipientId: review.user._id,
+          senderName: user.name,
+          type: "comment",
+          movieTitle: review.movieTitle
+        });
+      }
+
+      // 📣 Emit socket events for mentions
+      if (res.data.mentionedUsers) {
+        res.data.mentionedUsers.forEach(mUser => {
+          socket.emit("sendNotification", {
+            recipientId: mUser._id,
+            senderName: user.name,
+            type: "mention",
+            movieTitle: review.movieTitle
+          });
+        });
+      }
+
       setCommentText("");
       toast.success("Comment posted!");
     } catch (err) {
@@ -126,6 +172,30 @@ const Home = () => {
       setFeed((prev) =>
         prev.map((r) => (r._id === reviewId ? { ...r, comments: res.data.comments } : r))
       );
+
+      // 📡 Emit socket event to notify the owner
+      const review = feed.find(f => f._id === reviewId);
+      if (review.user._id !== user._id) {
+        socket.emit("sendNotification", {
+          recipientId: review.user._id,
+          senderName: user.name,
+          type: "comment",
+          movieTitle: review.movieTitle
+        });
+      }
+
+      // 📣 Emit socket events for mentions
+      if (res.data.mentionedUsers) {
+        res.data.mentionedUsers.forEach(mUser => {
+          socket.emit("sendNotification", {
+            recipientId: mUser._id,
+            senderName: user.name,
+            type: "mention",
+            movieTitle: review.movieTitle
+          });
+        });
+      }
+
       setEditingComment(null);
       setEditText("");
       toast.success("Comment updated!");
@@ -145,6 +215,89 @@ const Home = () => {
     } catch (err) {
       toast.error("Failed to delete comment.");
     }
+  };
+
+  const handleInputChange = (e, type) => {
+    const val = e.target.value;
+    if (type === 'new') setCommentText(val);
+    else setEditText(val);
+
+    const cursorPosition = e.target.selectionStart;
+    const textBeforeCursor = val.substring(0, cursorPosition);
+    const lastAtSymbol = textBeforeCursor.lastIndexOf("@");
+
+    if (lastAtSymbol !== -1) {
+      const query = textBeforeCursor.substring(lastAtSymbol + 1);
+      if (!query.includes(" ")) {
+        setMentionSearch(query);
+        setActiveMentionInput(type);
+        setMentionStartIndex(lastAtSymbol);
+        return;
+      }
+    }
+    setActiveMentionInput(null);
+  };
+
+  const renderTextWithMentions = (text) => {
+    if (!text) return "";
+    const parts = text.split(/(@\w+)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith("@")) {
+        const username = part.substring(1);
+        const targetUser = friends.find(f => f.name === username) || (user?.name === username ? user : null);
+
+        if (targetUser) {
+          return (
+            <Link key={index} to={`/profile/${targetUser._id || targetUser.id}`} className="text-blue-400 font-semibold hover:underline cursor-pointer">
+              {part}
+            </Link>
+          );
+        }
+        return (
+          <span key={index} className="text-blue-400 font-semibold">
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
+  const insertMention = (friendName) => {
+    const currentText = activeMentionInput === 'new' ? commentText : editText;
+    const newText = currentText.substring(0, mentionStartIndex) + `@${friendName} ` + currentText.substring(mentionStartIndex + mentionSearch.length + 1);
+    
+    if (activeMentionInput === 'new') setCommentText(newText);
+    else setEditText(newText);
+    setActiveMentionInput(null);
+  };
+
+  const renderMentionDropdown = () => {
+    const filteredFriends = friends.filter(f => 
+      f.name.toLowerCase().includes(mentionSearch.toLowerCase())
+    );
+    if (filteredFriends.length === 0) return null;
+    return (
+      <div className="absolute bottom-full left-0 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-xl mb-1 z-50 max-h-40 overflow-y-auto">
+        {filteredFriends.map(f => (
+          <div key={f._id} onClick={() => insertMention(f.name)} className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center gap-2 transition-colors">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-[10px] font-bold overflow-hidden">
+              {f.avatar ? (
+                <img 
+                  src={f.avatar} 
+                  alt={f.name} 
+                  className="w-full h-full object-cover" 
+                  onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(f.name)}&background=random`; }}
+                />
+              ) : (
+                f.name.charAt(0).toUpperCase()
+              )}
+            </div>
+            <span className="text-sm text-white">{f.name}</span>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   const searchMovies = async () => {
@@ -219,9 +372,9 @@ const Home = () => {
                         <div className="bg-gray-800 rounded-xl overflow-hidden shadow-lg transition-all duration-300 group-hover:-translate-y-2 group-hover:shadow-2xl h-full flex flex-col border border-gray-700">
                           <div className="relative aspect-[2/3] overflow-hidden">
                             <img
-                              src={movie.Poster !== "N/A" ? movie.Poster : "https://via.placeholder.com/500x750?text=No+Image"}
+                              src={movie.Poster !== "N/A" ? movie.Poster : "https://placehold.co/500x750?text=No+Image"}
                               alt={movie.Title}
-                              onError={(e) => { e.target.src = "https://via.placeholder.com/500x750?text=No+Image"; }}
+                              onError={(e) => { e.target.src = "https://placehold.co/500x750?text=No+Image"; }}
                               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                             />
                             <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300"></div>
@@ -248,9 +401,9 @@ const Home = () => {
                           <div className="bg-gray-800 rounded-xl overflow-hidden shadow-lg transition-all duration-300 group-hover:-translate-y-2 group-hover:shadow-2xl h-full flex flex-col border border-gray-700">
                             <div className="relative aspect-[2/3] overflow-hidden">
                               <img
-                                src={movie.Poster !== "N/A" ? movie.Poster : "https://via.placeholder.com/500x750?text=No+Image"}
+                                src={movie.Poster !== "N/A" ? movie.Poster : "https://placehold.co/500x750?text=No+Image"}
                                 alt={movie.Title}
-                                onError={(e) => { e.target.src = "https://via.placeholder.com/500x750?text=No+Image"; }}
+                                onError={(e) => { e.target.src = "https://placehold.co/500x750?text=No+Image"; }}
                                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                               />
                               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300"></div>
@@ -275,9 +428,9 @@ const Home = () => {
                           <div className="bg-gray-800 rounded-xl overflow-hidden shadow-lg transition-all duration-300 group-hover:-translate-y-2 group-hover:shadow-2xl h-full flex flex-col border border-gray-700">
                             <div className="relative aspect-[2/3] overflow-hidden">
                               <img
-                                src={movie.Poster !== "N/A" ? movie.Poster : "https://via.placeholder.com/500x750?text=No+Image"}
+                                src={movie.Poster !== "N/A" ? movie.Poster : "https://placehold.co/500x750?text=No+Image"}
                                 alt={movie.Title}
-                                onError={(e) => { e.target.src = "https://via.placeholder.com/500x750?text=No+Image"; }}
+                                onError={(e) => { e.target.src = "https://placehold.co/500x750?text=No+Image"; }}
                                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                               />
                               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300"></div>
@@ -320,8 +473,17 @@ const Home = () => {
                   </div>
                   
                   <div className="flex items-center">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-lg mr-3 shadow-inner">
-                      {r.user?.name?.charAt(0).toUpperCase() || "U"}
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-lg mr-3 shadow-inner overflow-hidden">
+                      {r.user?.avatar ? (
+                        <img 
+                          src={r.user.avatar} 
+                          alt={r.user.name} 
+                          className="w-full h-full object-cover" 
+                          onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(r.user?.name || 'User')}&background=random`; }}
+                        />
+                      ) : (
+                        r.user?.name?.charAt(0).toUpperCase() || "U"
+                      )}
                     </div>
                     <div>
                       <p className="font-bold text-white leading-none mb-1">{r.user?.name || "Unknown"}</p>
@@ -332,7 +494,7 @@ const Home = () => {
                     </div>
                   </div>
 
-                  <p className="text-gray-300 italic leading-relaxed bg-gray-900/40 p-3 rounded-xl border border-gray-700/50">"{r.comment}"</p>
+                  <p className="text-gray-300 italic leading-relaxed bg-gray-900/40 p-3 rounded-xl border border-gray-700/50">"{renderTextWithMentions(r.comment)}"</p>
                   
                   <div className="mt-auto pt-3 border-t border-gray-700/50 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -368,14 +530,17 @@ const Home = () => {
                           <div key={c._id || idx} className="text-sm bg-gray-900/50 p-2 rounded-lg flex flex-col gap-1 group/comment">
                             {editingComment?.commentId === c._id ? (
                               <div className="flex flex-col gap-2 w-full">
-                                <input
+                                <div className="relative">
+                                  <input
                                   type="text"
                                   value={editText}
-                                  onChange={(e) => setEditText(e.target.value)}
+                                  onChange={(e) => handleInputChange(e, 'edit')}
                                   className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
                                   autoFocus
                                   onKeyDown={(e) => e.key === "Enter" && handleUpdateComment(r._id, c._id)}
                                 />
+                                  {activeMentionInput === 'edit' && renderMentionDropdown()}
+                                </div>
                                 <div className="flex gap-3">
                                   <button onClick={() => handleUpdateComment(r._id, c._id)} className="text-[10px] text-blue-400 font-bold hover:underline">Save</button>
                                   <button onClick={() => setEditingComment(null)} className="text-[10px] text-gray-500 font-bold hover:underline">Cancel</button>
@@ -386,7 +551,7 @@ const Home = () => {
                                 <div className="flex flex-col">
                                   <div>
                                     <span className="font-bold text-blue-400 mr-2">{c.user?.name || "User"}:</span>
-                                    <span className="text-gray-300">{c.text}</span>
+                                    <span className="text-gray-300">{renderTextWithMentions(c.text)}</span>
                                   </div>
                                   <span className="text-[10px] text-gray-500 mt-0.5">
                                     {c.createdAt ? formatDistanceToNow(new Date(c.createdAt), { addSuffix: true }) : "Just now"}
@@ -420,14 +585,17 @@ const Home = () => {
                       </div>
                       
                       <div className="flex gap-2">
+                        <div className="flex-1 relative">
                         <input
                           type="text"
                           value={commentText}
-                          onChange={(e) => setCommentText(e.target.value)}
+                          onChange={(e) => handleInputChange(e, 'new')}
                           placeholder="Write a comment..."
-                          className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
                           onKeyDown={(e) => e.key === "Enter" && handlePostComment(r._id)}
                         />
+                        {activeMentionInput === 'new' && renderMentionDropdown()}
+                        </div>
                         <button
                           onClick={() => handlePostComment(r._id)}
                           disabled={!commentText.trim()}
@@ -457,7 +625,6 @@ const Home = () => {
             )}
           </section>
         )}
-        <Toaster position="bottom-center" />
       </div>
     </div>
   );

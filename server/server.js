@@ -1,5 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
+dotenv.config();
 import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
@@ -20,12 +21,12 @@ import reminderRoutes from "./routes/reminder.routes.js";
 import startReminderJob from "./utils/scheduler.js";
 import streamingRoutes from "./routes/streaming.routes.js";
 import searchRoutes from "./routes/search.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config();
 connectDB();
 startReminderJob();
 
@@ -61,6 +62,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/reminders", reminderRoutes);
 app.use("/api/streaming", streamingRoutes);
 app.use("/api/search", searchRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // ================= SOCKET.IO =================
 const io = new Server(server, {
@@ -112,6 +114,14 @@ io.on("connection", (socket) => {
     const receiverSocket = onlineUsers[receiverId];
     if (receiverSocket) {
       io.to(receiverSocket).emit("stopTyping", { senderId });
+    }
+  });
+
+  // 🔔 Real-time Notifications
+  socket.on("sendNotification", ({ recipientId, senderName, type, movieTitle }) => {
+    const receiverSocket = onlineUsers[recipientId];
+    if (receiverSocket) {
+      io.to(receiverSocket).emit("getNotification", { senderName, type, movieTitle });
     }
   });
 

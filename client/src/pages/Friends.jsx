@@ -82,8 +82,17 @@ const Friends = () => {
               {searchResults.map((user) => (
                 <div key={user._id} className="flex items-center justify-between bg-gray-700/50 p-3 md:p-4 rounded-xl border border-gray-600">
                   <div className="flex items-center overflow-hidden">
-                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold text-white mr-3 shadow-sm shrink-0">
-                      {user.name?.charAt(0).toUpperCase()}
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold text-white mr-3 shadow-sm shrink-0 overflow-hidden">
+                      {user.avatar ? (
+                        <img 
+                          src={user.avatar} 
+                          alt={user.name} 
+                          className="w-full h-full object-cover" 
+                          onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`; }}
+                        />
+                      ) : (
+                        user.name?.charAt(0).toUpperCase()
+                      )}
                     </div>
                     <span className="font-semibold text-gray-100 truncate">{user.name}</span>
                   </div>
@@ -125,7 +134,12 @@ const Friends = () => {
               >
                 <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-r from-green-400 to-blue-500 flex items-center justify-center text-white font-bold text-lg md:text-xl mr-4 md:mr-5 shadow-sm shrink-0">
                   {f.avatar ? (
-                    <img src={f.avatar} alt={f.name} className="w-full h-full rounded-full object-cover" />
+                    <img 
+                      src={f.avatar} 
+                      alt={f.name} 
+                      className="w-full h-full rounded-full object-cover" 
+                      onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(f.name)}&background=random`; }}
+                    />
                   ) : (
                     f.name?.charAt(0).toUpperCase()
                   )}

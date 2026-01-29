@@ -3,6 +3,7 @@ import { AuthContext } from "../../context/AuthContext";
 import api from "../../services/api";
 import { toast } from "react-hot-toast";
 import { formatDistanceToNow } from "date-fns";
+import { Link } from "react-router-dom";
 
 const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filterRating, currentUserInWatchlist }) => {
   const { user } = useContext(AuthContext);
@@ -14,6 +15,10 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [friends, setFriends] = useState([]);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionStartIndex, setMentionStartIndex] = useState(-1);
 
   // Inject pulse animation
   useEffect(() => {
@@ -31,6 +36,9 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
 
   useEffect(() => {
     api.get(`/api/reviews/${movieId}`).then((res) => setReviews(res.data));
+    if (user) {
+      api.get("/api/friends").then(res => setFriends(res.data));
+    }
   }, [movieId]);
 
   useEffect(() => {
@@ -55,6 +63,57 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
     } else {
       setPreview(null);
     }
+  };
+
+  const renderTextWithMentions = (text) => {
+    if (!text) return "";
+    const parts = text.split(/(@\w+)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith("@")) {
+        const username = part.substring(1);
+        const targetUser = friends.find(f => f.name === username) || (user?.name === username ? user : null);
+
+        if (targetUser) {
+          return (
+            <Link key={index} to={`/profile/${targetUser._id || targetUser.id}`} className="text-blue-400 font-semibold hover:underline cursor-pointer">
+              {part}
+            </Link>
+          );
+        }
+        return (
+          <span key={index} className="text-blue-400 font-semibold">
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
+  const handleCommentChange = (e) => {
+    const val = e.target.value;
+    setComment(val);
+
+    const cursorPosition = e.target.selectionStart;
+    const textBeforeCursor = val.substring(0, cursorPosition);
+    const lastAtSymbol = textBeforeCursor.lastIndexOf("@");
+
+    if (lastAtSymbol !== -1) {
+      const query = textBeforeCursor.substring(lastAtSymbol + 1);
+      if (!query.includes(" ")) {
+        setMentionSearch(query);
+        setShowMentions(true);
+        setMentionStartIndex(lastAtSymbol);
+        return;
+      }
+    }
+    setShowMentions(false);
+  };
+
+  const insertMention = (friendName) => {
+    const newText = comment.substring(0, mentionStartIndex) + `@${friendName} ` + comment.substring(mentionStartIndex + mentionSearch.length + 1);
+    setComment(newText);
+    setShowMentions(false);
   };
 
   const handleSubmit = async (e) => {
@@ -150,12 +209,36 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
 
         <div>
           <label className="block text-gray-400 text-sm mb-1">Comment</label>
+          <div className="relative">
           <textarea
             value={comment}
-            onChange={(e) => setComment(e.target.value)}
+            onChange={handleCommentChange}
             placeholder="Share your thoughts..."
             className="w-full bg-gray-900 text-white p-3 rounded border border-gray-600 focus:border-blue-500 outline-none h-24 resize-none"
           />
+          {showMentions && (
+            <div className="absolute bottom-full left-0 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-xl mb-1 z-50 max-h-40 overflow-y-auto">
+              {friends
+                .filter(f => f.name.toLowerCase().includes(mentionSearch.toLowerCase()))
+                .map(f => (
+                  <div 
+                    key={f._id} 
+                    onClick={() => insertMention(f.name)} 
+                    className="px-3 py-2 hover:bg-gray-700 cursor-pointer flex items-center gap-2 transition-colors"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-[10px] font-bold overflow-hidden">
+                      {f.avatar ? (
+                        <img src={f.avatar} alt={f.name} className="w-full h-full object-cover" />
+                      ) : (
+                        f.name.charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <span className="text-sm text-white">{f.name}</span>
+                  </div>
+                ))}
+            </div>
+          )}
+          </div>
         </div>
 
         <div>
@@ -211,8 +294,12 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
             <div key={review._id} className="bg-gray-800 p-6 rounded-xl border border-gray-700">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-white">
-                    {review.user?.name?.charAt(0).toUpperCase() || "U"}
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-white overflow-hidden">
+                    {review.user?.avatar ? (
+                      <img src={review.user.avatar} alt={review.user.name} className="w-full h-full object-cover" />
+                    ) : (
+                      review.user?.name?.charAt(0).toUpperCase() || "U"
+                    )}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -247,7 +334,7 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
                 </div>
               </div>
 
-              <p className="text-gray-300 mb-4 leading-relaxed">{review.comment}</p>
+              <p className="text-gray-300 mb-4 leading-relaxed">{renderTextWithMentions(review.comment)}</p>
 
               {review.image && (
                 <div className="mt-4">

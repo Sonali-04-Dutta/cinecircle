@@ -7,6 +7,7 @@ import Watchlist from "./pages/Watchlist";
 import Friends from "./pages/Friends";
 import Chat from "./pages/Chat";
 import Profile from "./pages/Profile";
+import Notifications from "./pages/Notifications";
 
 const AppRoutes = () => (
   <Routes>
@@ -18,6 +19,8 @@ const AppRoutes = () => (
     <Route path="/friends" element={<Friends />} />
     <Route path="/chat/:id" element={<Chat />} />
     <Route path="/profile" element={<Profile />} />
+    <Route path="/profile/:id" element={<Profile />} />
+    <Route path="/notifications" element={<Notifications />} />
   </Routes>
 );
 

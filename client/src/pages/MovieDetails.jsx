@@ -4,7 +4,7 @@ import api from "../services/api";
 import StreamingProviders from "../components/movie/StreamingProviders";
 import ReviewSection from "../components/movie/ReviewSection";
 import TrailerModal from "../components/movie/TrailerModal";
-import { toast, Toaster } from "react-hot-toast";
+import { toast } from "react-hot-toast";
 
 
 const MovieDetails = () => {
@@ -79,9 +79,9 @@ const MovieDetails = () => {
         <div className="flex flex-col md:flex-row gap-8">
           <div className="w-full md:w-1/3 lg:w-1/4 flex-shrink-0">
             <img
-              src={movie.Poster !== "N/A" ? movie.Poster : "https://via.placeholder.com/500x750?text=No+Image"}
+              src={movie.Poster !== "N/A" ? movie.Poster : "https://placehold.co/500x750?text=No+Image"}
               alt={movie.Title}
-              onError={(e) => { e.target.src = "https://via.placeholder.com/500x750?text=No+Image"; }}
+              onError={(e) => { e.target.src = "https://placehold.co/500x750?text=No+Image"; }}
               className="w-full rounded-xl shadow-2xl border border-gray-700"
             />
             <div className="mt-4 flex flex-col gap-3">
@@ -206,7 +206,6 @@ const MovieDetails = () => {
           onClose={() => setIsTrailerOpen(false)}
           trailerKey={trailerKey}
         />
-        <Toaster position="bottom-center" toastOptions={{ duration: 3000 }} />
       </div>
     </div>
   );

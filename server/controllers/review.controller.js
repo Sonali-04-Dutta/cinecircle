@@ -1,6 +1,7 @@
 import Review from "../models/Review.js";
 import User from "../models/User.js";
 import Watchlist from "../models/Watchlist.js";
+import Notification from "../models/Notification.js";
 
 
 // ➕ Add or Update Review
@@ -151,9 +152,41 @@ export const addComment = async (req, res) => {
     review.comments.push(newComment);
     await review.save();
 
+    // 📣 Handle Mentions (@username)
+    const mentionRegex = /@(\w+)/g;
+    const mentionedUsernames = text.match(mentionRegex)?.map(m => m.substring(1)) || [];
+    let mentionedUsers = [];
+
+    if (mentionedUsernames.length > 0) {
+      mentionedUsers = await User.find({ name: { $in: mentionedUsernames } }).select("_id name");
+      for (const mUser of mentionedUsers) {
+        // Notify mentioned user if they aren't the sender or the review owner (who gets a 'comment' notification)
+        if (mUser._id.toString() !== req.user._id.toString() && mUser._id.toString() !== review.user.toString()) {
+          await Notification.create({
+            recipient: mUser._id,
+            sender: req.user._id,
+            type: "mention",
+            reviewId: review._id,
+            movieTitle: review.movieTitle
+          });
+        }
+      }
+    }
+
+    // 🔔 Create Notification for the review owner
+    if (review.user.toString() !== req.user._id.toString()) {
+      await Notification.create({
+        recipient: review.user,
+        sender: req.user._id,
+        type: "comment",
+        reviewId: review._id,
+        movieTitle: review.movieTitle
+      });
+    }
+
     // Populate user info for the new comment before sending back
     const updatedReview = await Review.findById(review._id).populate("user", "name").populate("comments.user", "name");
-    res.json(updatedReview);
+    res.json({ ...updatedReview.toObject(), mentionedUsers });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -179,8 +212,39 @@ export const updateComment = async (req, res) => {
     comment.text = text;
     await review.save();
 
+    // 📣 Handle Mentions (@username)
+    const mentionRegex = /@(\w+)/g;
+    const mentionedUsernames = text.match(mentionRegex)?.map(m => m.substring(1)) || [];
+    let mentionedUsers = [];
+
+    if (mentionedUsernames.length > 0) {
+      mentionedUsers = await User.find({ name: { $in: mentionedUsernames } }).select("_id name");
+      for (const mUser of mentionedUsers) {
+        if (mUser._id.toString() !== req.user._id.toString() && mUser._id.toString() !== review.user.toString()) {
+          await Notification.create({
+            recipient: mUser._id,
+            sender: req.user._id,
+            type: "mention",
+            reviewId: review._id,
+            movieTitle: review.movieTitle
+          });
+        }
+      }
+    }
+
+    // 🔔 Create Notification for the review owner
+    if (review.user.toString() !== req.user._id.toString()) {
+      await Notification.create({
+        recipient: review.user,
+        sender: req.user._id,
+        type: "comment",
+        reviewId: review._id,
+        movieTitle: review.movieTitle
+      });
+    }
+
     const updatedReview = await Review.findById(review._id).populate("user", "name").populate("comments.user", "name");
-    res.json(updatedReview);
+    res.json({ ...updatedReview.toObject(), mentionedUsers });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -195,6 +259,17 @@ export const likeReview = async (req, res) => {
     const index = review.likes.indexOf(req.user._id);
     if (index === -1) {
       review.likes.push(req.user._id);
+      
+      // 🔔 Create Notification for the review owner
+      if (review.user.toString() !== req.user._id.toString()) {
+        await Notification.create({
+          recipient: review.user,
+          sender: req.user._id,
+          type: "like",
+          reviewId: review._id,
+          movieTitle: review.movieTitle
+        });
+      }
     } else {
       review.likes.splice(index, 1);
     }
