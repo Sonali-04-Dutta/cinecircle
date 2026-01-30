@@ -1,4 +1,5 @@
 import { createContext, useState } from "react";
+import api from "../services/api";
 
 export const AuthContext = createContext();
 
@@ -18,6 +19,16 @@ export const AuthProvider = ({ children }) => {
     setUser(data);
   };
 
+  const loginWithGoogle = async (accessToken) => {
+    try {
+      const res = await api.post("/api/auth/google", { accessToken });
+      login(res.data);
+    } catch (error) {
+      console.error("Google login failed:", error);
+      throw error;
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem("sceneit_user");
     setUser(null);
@@ -30,7 +41,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, loginWithGoogle }}>
       {children}
     </AuthContext.Provider>
   );

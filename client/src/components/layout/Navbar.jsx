@@ -1,13 +1,30 @@
 import { useState, useContext, useEffect } from "react";
 import { Link, NavLink } from "react-router-dom";
+import { useGoogleLogin } from "@react-oauth/google";
+import { FaGoogle } from "react-icons/fa";
 import { AuthContext } from "../../context/AuthContext";
 import { NotificationContext } from "../../context/NotificationContext";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout, loginWithGoogle } = useContext(AuthContext);
   const { unreadCount } = useContext(NotificationContext);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  const googleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setIsGoogleLoading(true);
+      try {
+        await loginWithGoogle(tokenResponse.access_token);
+      } catch (error) {
+        console.error("Google Login Error:", error);
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    },
+    onError: (error) => console.error("Google Login Failed:", error),
+  });
 
   useEffect(() => {
     if (theme === "dark") {
@@ -98,12 +115,22 @@ const Navbar = () => {
                 </button>
               </>
             ) : (
-              <Link
-                to="/login"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-md"
-              >
-                Login
-              </Link>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => !isGoogleLoading && googleLogin()}
+                  className={`flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm ${isGoogleLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title="Sign in with Google"
+                >
+                  <FaGoogle className={isGoogleLoading ? "animate-spin" : "text-rose-500"} />
+                  <span className="hidden lg:inline">{isGoogleLoading ? "Connecting..." : "Google"}</span>
+                </button>
+                <Link
+                  to="/login"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-md"
+                >
+                  Login
+                </Link>
+              </div>
             )}
           </div>
 
@@ -143,13 +170,22 @@ const Navbar = () => {
             ))}
           
           {!user && (
-            <NavLink 
-              to="/login" 
-              onClick={closeMenu}
-              className="block px-3 py-2 rounded-md text-base font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30 mt-2"
-            >
-              Login / Register
-            </NavLink>
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={() => { googleLogin(); closeMenu(); }}
+                className="flex items-center gap-3 w-full px-3 py-2 rounded-md text-base font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-700"
+              >
+                <FaGoogle className="text-rose-500" />
+                Sign in with Google
+              </button>
+              <NavLink 
+                to="/login" 
+                onClick={closeMenu}
+                className="block px-3 py-2 rounded-md text-base font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30"
+              >
+                Login / Register
+              </NavLink>
+            </div>
           )}
 
           <button
