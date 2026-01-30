@@ -34,9 +34,12 @@ startReminderJob();
 const app = express();
 const server = http.createServer(app); // 🔥 Create HTTP server for Socket.io
 
-// 🔧 CORS Configuration
+// 🛠️ Sanitize CLIENT_URL to remove trailing slash (CORS is sensitive to this)
+const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, "") : "";
+
+//  CORS Configuration
 const corsOptions = {
-  origin: (origin, callback) => callback(null, true), // Allow all origins dynamically
+  origin: process.env.NODE_ENV === "production" ? clientUrl : (origin, callback) => callback(null, true),
   credentials: true,
 };
 
