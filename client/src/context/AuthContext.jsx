@@ -3,9 +3,15 @@ import { createContext, useState } from "react";
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(
-    JSON.parse(localStorage.getItem("sceneit_user"))
-  );
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem("sceneit_user");
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch (error) {
+      console.error("Failed to parse user from localStorage", error);
+      return null;
+    }
+  });
 
   const login = (data) => {
     localStorage.setItem("sceneit_user", JSON.stringify(data));

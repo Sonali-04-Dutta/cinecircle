@@ -85,7 +85,7 @@ const Friends = () => {
                     <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold text-white mr-3 shadow-sm shrink-0 overflow-hidden">
                       {user.avatar ? (
                         <img 
-                          src={(user.avatar.startsWith('http') || user.avatar.startsWith('data:')) ? user.avatar : `http://localhost:5000${user.avatar.startsWith('/') ? '' : '/'}${user.avatar}`} 
+                          src={(user.avatar.startsWith('http') || user.avatar.startsWith('data:')) ? user.avatar : `${import.meta.env.VITE_API_URL || ''}${user.avatar.startsWith('/') ? '' : '/'}${user.avatar}`} 
                           alt={user.name} 
                           className="w-full h-full object-cover" 
                           onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`; }}
@@ -135,7 +135,7 @@ const Friends = () => {
                 <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-r from-green-400 to-blue-500 flex items-center justify-center text-white font-bold text-lg md:text-xl mr-4 md:mr-5 shadow-sm shrink-0">
                   {f.avatar ? (
                     <img 
-                      src={(f.avatar.startsWith('http') || f.avatar.startsWith('data:')) ? f.avatar : `http://localhost:5000${f.avatar.startsWith('/') ? '' : '/'}${f.avatar}`} 
+                      src={(f.avatar.startsWith('http') || f.avatar.startsWith('data:')) ? f.avatar : `${import.meta.env.VITE_API_URL || ''}${f.avatar.startsWith('/') ? '' : '/'}${f.avatar}`} 
                       alt={f.name} 
                       className="w-full h-full rounded-full object-cover" 
                       onError={(e) => { e.target.onerror = null; e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(f.name)}&background=random`; }}

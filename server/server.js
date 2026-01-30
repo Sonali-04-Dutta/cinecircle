@@ -37,7 +37,7 @@ const server = http.createServer(app); // 🔥 Create HTTP server for Socket.io
 // 🛠️ Sanitize CLIENT_URL to remove trailing slash (CORS is sensitive to this)
 const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, "") : "";
 
-//  CORS Configuration
+// 🔧 CORS Configuration
 const corsOptions = {
   origin: process.env.NODE_ENV === "production" ? clientUrl : (origin, callback) => callback(null, true),
   credentials: true,
@@ -62,19 +62,10 @@ app.use("/api/streaming", streamingRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/notifications", notificationRoutes);
 
-// 🚀 Production Setup: Serve Frontend
-if (process.env.NODE_ENV === "production") {
-  // Set static folder
-  app.use(express.static(path.join(__dirname, "../client/dist")));
-
-  app.get("*", (req, res) => {
-    res.sendFile(path.resolve(__dirname, "../client", "dist", "index.html"));
-  });
-} else {
-  app.get("/", (req, res) => {
-    res.send("🎬 CineCircle API is running in development mode...");
-  });
-}
+// 🧪 Health Check Route
+app.get("/", (req, res) => {
+  res.send("🎬 CineCircle API is running...");
+});
 
 // ================= SOCKET.IO =================
 const io = new Server(server, {
