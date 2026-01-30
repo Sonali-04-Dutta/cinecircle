@@ -123,22 +123,35 @@ const Navbar = () => {
       {/* Mobile menu */}
       <div className={`${isOpen ? "block" : "hidden"} md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 animate-fade-in`}>
         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-          {navLinks.map((link) => (
-            <NavLink
-              key={link.name}
-              to={link.path}
+          {navLinks
+            .filter(link => user || link.name === "Home") // Only show Home if not logged in
+            .map((link) => (
+              <NavLink
+                key={link.name}
+                to={link.path}
+                onClick={closeMenu}
+                className={({ isActive }) =>
+                  `block px-3 py-2 rounded-md text-base font-medium ${
+                    isActive
+                      ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20"
+                      : "text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400"
+                  }`
+                }
+              >
+                {link.name}
+              </NavLink>
+            ))}
+          
+          {!user && (
+            <NavLink 
+              to="/login" 
               onClick={closeMenu}
-              className={({ isActive }) =>
-                `block px-3 py-2 rounded-md text-base font-medium ${
-                  isActive
-                    ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20"
-                    : "text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400"
-                }`
-              }
+              className="block px-3 py-2 rounded-md text-base font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30 mt-2"
             >
-              {link.name}
+              Login / Register
             </NavLink>
-          ))}
+          )}
+
           <button
             onClick={toggleTheme}
             className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-md text-base font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
