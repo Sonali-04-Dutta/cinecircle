@@ -1,6 +1,5 @@
+import "dotenv/config";
 import express from "express";
-import dotenv from "dotenv";
-dotenv.config();
 import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
@@ -32,6 +31,10 @@ startReminderJob();
 
 
 const app = express();
+
+// Trust proxy for accurate IP detection in production (Heroku, Render, Nginx, etc.)
+app.set("trust proxy", 1);
+
 const server = http.createServer(app); // 🔥 Create HTTP server for Socket.io
 
 // 🛠️ Sanitize CLIENT_URL to remove trailing slash (CORS is sensitive to this)
@@ -65,6 +68,13 @@ app.use("/api/notifications", notificationRoutes);
 // 🧪 Health Check Route
 app.get("/", (req, res) => {
   res.send("🎬 CineCircle API is running...");
+});
+
+// 🚨 Global Error Handler (Production Best Practice)
+app.use((err, req, res, next) => {
+  console.error(`Error: ${err.message}`);
+  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  res.status(statusCode).json({ message: err.message || "Internal Server Error" });
 });
 
 // ================= SOCKET.IO =================

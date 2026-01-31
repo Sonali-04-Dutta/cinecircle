@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import api from "../services/api";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Recommendations from "../components/movie/Recommendations";
 import { AuthContext } from "../context/AuthContext";
 import { toast } from "react-hot-toast";
@@ -8,11 +8,13 @@ import { formatDistanceToNow } from "date-fns";
 import { NotificationContext } from "../context/NotificationContext";
 import { SocketContext } from "../context/SocketContext";
 import PageTransition from "../components/layout/PageTransition";
+import MentionWithPreview from "../components/movie/MentionWithPreview";
 
 const Home = () => {
   const { user } = useContext(AuthContext);
   const { setUnreadCount } = useContext(NotificationContext);
   const socket = useContext(SocketContext);
+  const navigate = useNavigate();
 
   const [query, setQuery] = useState("");
   const [movies, setMovies] = useState([]);
@@ -239,25 +241,54 @@ const Home = () => {
     setActiveMentionInput(null);
   };
 
+  const handleMentionClick = async (e, username) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    try {
+      // Try to find the user via the search API
+      const res = await api.get(`/api/search/users?q=${username}`);
+      // Find an exact match (case-insensitive)
+      const match = res.data.find(u => u.name.toLowerCase().trim() === username.toLowerCase().trim());
+      
+      if (match) {
+        navigate(`/profile/${match._id}`);
+      } else {
+        toast.error(`User "@${username}" not found`);
+      }
+    } catch (err) {
+      toast.error("Could not resolve user mention");
+    }
+  };
+
   const renderTextWithMentions = (text) => {
     if (!text) return "";
-    const parts = text.split(/(@\w+)/g);
+    const parts = text.split(/(@[\w.]+)/g);
+
+    // Use a Map for O(1) lookup and handle potential duplicates/incomplete objects
+    const userMap = new Map();
+    friends.forEach(f => { if (f.name) userMap.set(f.name.toLowerCase().trim(), f); });
+    if (user?.name) userMap.set(user.name.toLowerCase().trim(), user);
+    feed.forEach(r => {
+      if (r.user?.name) userMap.set(r.user.name.toLowerCase().trim(), r.user);
+      r.comments?.forEach(c => {
+        if (c.user?.name) userMap.set(c.user.name.toLowerCase().trim(), c.user);
+      });
+    });
+
     return parts.map((part, index) => {
       if (part.startsWith("@")) {
-        const username = part.substring(1);
-        const targetUser = friends.find(f => f.name === username) || (user?.name === username ? user : null);
+        const username = part.substring(1).toLowerCase().trim();
+        const targetUser = userMap.get(username);
 
-        if (targetUser) {
-          return (
-            <Link key={index} to={`/profile/${targetUser._id || targetUser.id}`} className="text-blue-400 font-semibold hover:underline cursor-pointer">
-              {part}
-            </Link>
-          );
-        }
         return (
-          <span key={index} className="text-blue-400 font-semibold">
-            {part}
-          </span>
+          <MentionWithPreview
+            key={index}
+            part={part}
+            username={username}
+            targetUser={targetUser}
+            onMentionClick={handleMentionClick}
+          />
         );
       }
       return part;

@@ -3,10 +3,12 @@ import { AuthContext } from "../../context/AuthContext";
 import api from "../../services/api";
 import { toast } from "react-hot-toast";
 import { formatDistanceToNow } from "date-fns";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import MentionWithPreview from "./MentionWithPreview";
 
 const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filterRating, currentUserInWatchlist }) => {
   const { user } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [reviews, setReviews] = useState([]);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
@@ -65,25 +67,48 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
     }
   };
 
+  const handleMentionClick = async (e, username) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    try {
+      const res = await api.get(`/api/search/users?q=${username}`);
+      const match = res.data.find(u => u.name.toLowerCase().trim() === username.toLowerCase().trim());
+      
+      if (match) {
+        navigate(`/profile/${match._id}`);
+      } else {
+        toast.error(`User "@${username}" not found`);
+      }
+    } catch (err) {
+      toast.error("Could not resolve user mention");
+    }
+  };
+
   const renderTextWithMentions = (text) => {
     if (!text) return "";
-    const parts = text.split(/(@\w+)/g);
+    const parts = text.split(/(@[\w.]+)/g);
+
+    const userMap = new Map();
+    friends.forEach(f => { if (f.name) userMap.set(f.name.toLowerCase().trim(), f); });
+    if (user?.name) userMap.set(user.name.toLowerCase().trim(), user);
+    reviews.forEach(r => {
+      if (r.user?.name) userMap.set(r.user.name.toLowerCase().trim(), r.user);
+    });
+
     return parts.map((part, index) => {
       if (part.startsWith("@")) {
-        const username = part.substring(1);
-        const targetUser = friends.find(f => f.name === username) || (user?.name === username ? user : null);
+        const username = part.substring(1).toLowerCase().trim();
+        const targetUser = userMap.get(username);
 
-        if (targetUser) {
-          return (
-            <Link key={index} to={`/profile/${targetUser._id || targetUser.id}`} className="text-blue-400 font-semibold hover:underline cursor-pointer">
-              {part}
-            </Link>
-          );
-        }
         return (
-          <span key={index} className="text-blue-400 font-semibold">
-            {part}
-          </span>
+          <MentionWithPreview
+            key={index}
+            part={part}
+            username={username}
+            targetUser={targetUser}
+            onMentionClick={handleMentionClick}
+          />
         );
       }
       return part;

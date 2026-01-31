@@ -8,16 +8,19 @@ const Register = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setLoading(true);
     try {
       const res = await api.post("/api/auth/register", form);
-      login(res.data);
-      navigate("/");
+      navigate("/verify-otp", { state: { email: res.data.email } });
     } catch (err) {
       setError(err.response?.data?.message || "Registration failed");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -61,7 +64,17 @@ const Register = () => {
               onChange={(e) => setForm({ ...form, password: e.target.value })} 
             />
           </div>
-          <button className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold py-3 rounded-lg shadow-lg transform transition hover:scale-[1.02] active:scale-95 mt-2">Register</button>
+          <button 
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold py-3 rounded-lg shadow-lg transform transition hover:scale-[1.02] active:scale-95 mt-2 disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                Sending OTP...
+              </div>
+            ) : "Register"}
+          </button>
         </form>
         <p className="mt-6 text-center text-gray-400">
           Already have an account? <Link to="/login" className="text-blue-400 hover:text-blue-300 font-semibold transition-colors">Login</Link>
