@@ -39,7 +39,11 @@ export const registerUser = async (req, res) => {
       isVerified: false,
     });
 
-    await sendEmail(user.email, "Verify your CineCircle Account", otp);
+    try {
+      await sendEmail(user.email, "Verify your CineCircle Account", otp);
+    } catch (emailErr) {
+      console.error("❌ Registration email failed (Timeout):", emailErr.message);
+    }
 
     res.status(201).json({
       message: "Registration successful. Please check your email for the OTP.",
@@ -162,7 +166,11 @@ export const loginUser = async (req, res) => {
       user.otpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
       await user.save();
 
-      await sendEmail(user.email, "Verify your CineCircle Account", otp);
+      try {
+        await sendEmail(user.email, "Verify your CineCircle Account", otp);
+      } catch (emailErr) {
+        console.error("❌ Login verification email failed (Timeout):", emailErr.message);
+      }
 
       return res.status(401).json({ 
         message: "Please verify your email. A new OTP has been sent to your inbox.",

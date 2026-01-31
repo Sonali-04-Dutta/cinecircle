@@ -1,22 +1,33 @@
 import nodemailer from "nodemailer";
 
+let transporter;
+
 const getTransporter = () => {
+  if (transporter) return transporter;
+
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    throw new Error("Email configuration missing: Check EMAIL_USER and EMAIL_PASS in .env");
+    console.error("❌ Email configuration missing: EMAIL_USER or EMAIL_PASS not set.");
+    return null;
   }
 
-  return nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE || "gmail",
+  transporter = nodemailer.createTransport({
+    service: "gmail",
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
+    pool: true, // Use connection pooling for better performance
+    connectionTimeout: 30000, // 30 seconds
+    greetingTimeout: 30000,   // 30 seconds
   });
+
+  return transporter;
 };
 
 export const sendEmail = async (to, subject, text) => {
   try {
     const transporter = getTransporter();
+    if (!transporter) throw new Error("Email service not configured");
 
     const mailOptions = {
       from: `"CineCircle Support" <${process.env.EMAIL_USER}>`,
@@ -34,7 +45,7 @@ export const sendEmail = async (to, subject, text) => {
 
     await transporter.sendMail(mailOptions);
   } catch (error) {
-    console.error("Email sending failed:", error);
+    console.error("❌ Email sending failed:", error.message);
     throw new Error("Email could not be sent");
   }
 };
@@ -42,6 +53,7 @@ export const sendEmail = async (to, subject, text) => {
 export const sendReminderEmail = async (to, movieTitle) => {
   try {
     const transporter = getTransporter();
+    if (!transporter) return;
 
     const mailOptions = {
       from: `"CineCircle Support" <${process.env.EMAIL_USER}>`,
