@@ -10,9 +10,45 @@ export const getMessages = async (req, res) => {
         { sender: req.user._id, receiver: userId },
         { sender: userId, receiver: req.user._id },
       ],
+      deletedBy: { $ne: req.user._id }
     }).sort({ createdAt: 1 }).populate("replyTo");
 
     res.json(messages);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 🗑️ Delete message for me (Soft Delete)
+export const deleteMessageForMe = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    await Message.findByIdAndUpdate(messageId, {
+      $addToSet: { deletedBy: userId }
+    });
+
+    res.json({ message: "Message deleted for you" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 🗑️ Delete a single message
+export const deleteMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const message = await Message.findById(messageId);
+
+    if (!message) return res.status(404).json({ message: "Message not found" });
+
+    if (message.sender.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "You can only delete your own messages" });
+    }
+
+    await Message.findByIdAndDelete(messageId);
+    res.json({ message: "Message deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -107,6 +143,53 @@ export const togglePin = async (req, res) => {
     await message.populate("replyTo");
 
     res.json(message);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 🔎 Search messages
+export const searchMessages = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { query } = req.query;
+
+    if (!query) return res.json([]);
+
+    const messages = await Message.find({
+      $or: [
+        { sender: req.user._id, receiver: userId },
+        { sender: userId, receiver: req.user._id },
+      ],
+      text: { $regex: query, $options: "i" },
+      deletedBy: { $ne: req.user._id }
+    }).sort({ createdAt: 1 }).populate("replyTo");
+
+    res.json(messages);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 🗑️ Clear chat history for me (Soft Delete)
+export const clearChatForMe = async (req, res) => {
+  try {
+    const { id: friendId } = req.params;
+    const userId = req.user._id;
+
+    await Message.updateMany(
+      {
+        $or: [
+          { sender: userId, receiver: friendId },
+          { sender: friendId, receiver: userId },
+        ],
+      },
+      {
+        $addToSet: { deletedBy: userId }
+      }
+    );
+
+    res.status(200).json({ message: "Chat cleared successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

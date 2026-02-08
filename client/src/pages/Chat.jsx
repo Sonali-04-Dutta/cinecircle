@@ -5,11 +5,47 @@ import { AuthContext } from "../context/AuthContext";
 import api from "../services/api";
 import { toast } from "react-hot-toast";
 
+const MessageText = ({ text, isEdited, isOwnMessage }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const maxLength = 300;
+
+  if (!text) return null;
+
+  if (text.length <= maxLength) {
+    return (
+      <p className="leading-relaxed whitespace-pre-wrap">
+        {text}
+        {isEdited && <span className="text-[10px] opacity-70 ml-1 italic">(edited)</span>}
+      </p>
+    );
+  }
+
+  return (
+    <div className="leading-relaxed whitespace-pre-wrap">
+      <span>{isExpanded ? text : `${text.substring(0, maxLength)}...`}</span>
+      {isEdited && <span className="text-[10px] opacity-70 ml-1 italic">(edited)</span>}
+      <button 
+        onClick={(e) => {
+            e.stopPropagation();
+            setIsExpanded(!isExpanded);
+        }} 
+        className={`text-xs font-bold ml-1 hover:underline ${isOwnMessage ? "text-white/90" : "text-indigo-600 dark:text-indigo-400"}`}
+      >
+        {isExpanded ? "Show less" : "Read more"}
+      </button>
+    </div>
+  );
+};
+
 const Chat = () => {
   const { id } = useParams();
   const socket = useContext(SocketContext);
   const { user } = useContext(AuthContext);
   const [messages, setMessages] = useState([]);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [friend, setFriend] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
   const [text, setText] = useState("");
@@ -25,6 +61,17 @@ const Chat = () => {
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const textareaRef = useRef(null);
+  const chatContainerRef = useRef(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [isMuted, setIsMuted] = useState(() => localStorage.getItem("chatMuted") === "true");
+
+  const toggleMute = () => {
+    setIsMuted((prev) => {
+      const newState = !prev;
+      localStorage.setItem("chatMuted", newState);
+      return newState;
+    });
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -50,8 +97,13 @@ const Chat = () => {
   }, [id]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isTyping]);
+    const lastMessage = messages[messages.length - 1];
+    const isOwnMessage = lastMessage?.sender === user._id;
+    
+    if (isOwnMessage || !showScrollBottom) {
+      scrollToBottom();
+    }
+  }, [messages, isTyping, isSearchOpen, searchResults]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -82,8 +134,10 @@ const Chat = () => {
         
         // Play sound if message is from the other person
         if (msg.sender === id) {
-          const audio = new Audio("/chat.mp3");
-          audio.play().catch(e => console.error("Audio play failed", e));
+          if (!isMuted) {
+            const audio = new Audio("/receive.mp3");
+            audio.play().catch(e => console.error("Audio play failed", e));
+          }
           // Mark as seen immediately if we are in this chat
           socket.emit("markMessagesSeen", { senderId: id, receiverId: user._id });
         }
@@ -112,6 +166,10 @@ const Chat = () => {
       if (senderId === id) setIsTyping(false);
     };
 
+    const handleMessageDeleted = ({ messageId }) => {
+      setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
+    };
+
     socket.on("receiveMessage", handleMessage);
     socket.on("typing", handleTyping);
     socket.on("stopTyping", handleStopTyping);
@@ -121,6 +179,7 @@ const Chat = () => {
     socket.on("messagePinned", handleMessageUpdated); // Reuse update handler
     socket.on("userOnline", handleUserOnline);
     socket.on("userOffline", handleUserOffline);
+    socket.on("messageDeleted", handleMessageDeleted);
 
     return () => {
       socket.off("receiveMessage", handleMessage);
@@ -132,8 +191,9 @@ const Chat = () => {
       socket.off("messagePinned", handleMessageUpdated);
       socket.off("userOnline", handleUserOnline);
       socket.off("userOffline", handleUserOffline);
+      socket.off("messageDeleted", handleMessageDeleted);
     };
-  }, [socket, id]);
+  }, [socket, id, isMuted]);
 
   const handleInputChange = (e) => {
     setText(e.target.value);
@@ -187,8 +247,10 @@ const Chat = () => {
       socket.emit("stopTyping", { senderId: user._id, receiverId: id });
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       
-      const audio = new Audio("/chat.mp3");
-      audio.play().catch(e => console.error("Audio play failed", e));
+      if (!isMuted) {
+        const audio = new Audio("/chat.mp3");
+        audio.play().catch(e => console.error("Audio play failed", e));
+      }
       setText("");
       setImage(null);
       setPreview(null);
@@ -204,15 +266,15 @@ const Chat = () => {
   };
 
   const handleDeleteChat = async () => {
-    if (!window.confirm("Are you sure you want to delete this conversation? This cannot be undone.")) return;
+    if (!window.confirm("Are you sure you want to clear your chat history?")) return;
 
     try {
-      await api.delete(`/api/chat/${id}`);
+      await api.delete(`/api/chat/${id}/me`);
       setMessages([]);
-      toast.success("Chat deleted successfully");
+      toast.success("Chat history cleared");
     } catch (err) {
-      console.error("Failed to delete chat", err);
-      toast.error("Failed to delete chat");
+      console.error("Failed to clear chat", err);
+      toast.error("Failed to clear chat");
     }
   };
 
@@ -239,6 +301,36 @@ const Chat = () => {
     }
   };
 
+  const deleteMessage = async (msgId) => {
+    if (!window.confirm("Are you sure you want to delete this message for everyone?")) return;
+
+    try {
+      await api.delete(`/api/chat/messages/${msgId}`);
+      setMessages((prev) => prev.filter((msg) => msg._id !== msgId));
+      setSearchResults((prev) => prev.filter((msg) => msg._id !== msgId));
+      toast.success("Message deleted");
+
+      if (socket && socket.connected) {
+        socket.emit("deleteMessage", { messageId: msgId, conversationId: id });
+      }
+    } catch (err) {
+      toast.error("Failed to delete message");
+    }
+  };
+
+  const deleteMessageForMe = async (msgId) => {
+    if (!window.confirm("Delete this message for you?")) return;
+
+    try {
+      await api.delete(`/api/chat/messages/${msgId}/me`);
+      setMessages((prev) => prev.filter((msg) => msg._id !== msgId));
+      setSearchResults((prev) => prev.filter((msg) => msg._id !== msgId));
+      toast.success("Message deleted for you");
+    } catch (err) {
+      toast.error("Failed to delete message");
+    }
+  };
+
   const toggleReaction = async (msgId, emoji) => {
     setShowReactionPickerId(null);
 
@@ -246,8 +338,9 @@ const Chat = () => {
       socket.emit("toggleReaction", { messageId: msgId, userId: user._id, emoji });
     } else {
       try {
-        const res = await api.put(`/api/chat/message/${msgId}/reaction`, { emoji });
+        const res = await api.put(`/api/chat/messages/${msgId}/reaction`, { emoji });
         setMessages((prev) => prev.map((msg) => (msg._id === res.data._id ? res.data : msg)));
+        setSearchResults((prev) => prev.map((msg) => (msg._id === res.data._id ? res.data : msg)));
       } catch (err) {
         console.error("Failed to toggle reaction", err);
         toast.error("Failed to update reaction");
@@ -260,14 +353,51 @@ const Chat = () => {
       socket.emit("togglePin", { messageId: msgId });
     } else {
       try {
-        const res = await api.put(`/api/chat/message/${msgId}/pin`);
+        const res = await api.put(`/api/chat/messages/${msgId}/pin`);
         setMessages((prev) => prev.map((msg) => (msg._id === res.data._id ? res.data : msg)));
+        setSearchResults((prev) => prev.map((msg) => (msg._id === res.data._id ? res.data : msg)));
       } catch (err) {
         console.error("Failed to toggle pin", err);
         toast.error("Failed to update pin status");
       }
     }
   };
+
+  const handleSearch = async (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const res = await api.get(`/api/chat/search/${id}?query=${query}`);
+      setSearchResults(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const closeSearch = () => {
+    setIsSearchOpen(false);
+    setSearchQuery("");
+    setSearchResults([]);
+  };
+
+  const handleScroll = () => {
+    if (chatContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+      const isBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setShowScrollBottom(!isBottom);
+    }
+  };
+
+  const displayedMessages = isSearchOpen && searchQuery ? searchResults : messages;
 
   return (
     <div className="h-[100dvh] bg-transparent text-slate-900 dark:text-slate-100 p-2 md:p-8 flex flex-col transition-all duration-500 ease-in-out overflow-hidden">
@@ -296,8 +426,22 @@ const Chat = () => {
                 </p>
               </div>
               <button
+                onClick={() => setIsSearchOpen(!isSearchOpen)}
+                className={`ml-auto text-gray-400 hover:text-indigo-500 transition-colors p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 ${isSearchOpen ? "text-indigo-500 bg-slate-200 dark:bg-slate-800" : ""}`}
+                title="Search Messages"
+              >
+                🔍
+              </button>
+              <button
+                onClick={toggleMute}
+                className={`text-gray-400 hover:text-indigo-500 transition-colors p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 ${isMuted ? "text-red-500" : ""}`}
+                title={isMuted ? "Unmute Sounds" : "Mute Sounds"}
+              >
+                {isMuted ? "🔇" : "🔊"}
+              </button>
+              <button
                 onClick={handleDeleteChat}
-                className="ml-auto text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800"
+                className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800"
                 title="Delete Chat"
               >
                 🗑️
@@ -311,33 +455,54 @@ const Chat = () => {
           )}
         </div>
 
+        {isSearchOpen && (
+          <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 animate-fade-in">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={handleSearch}
+              placeholder="Search messages..."
+              className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500"
+              autoFocus
+            />
+            <button onClick={closeSearch} className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-slate-950/50 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent">
+        <div className="flex-1 relative min-h-0">
+          <div 
+            ref={chatContainerRef}
+            onScroll={handleScroll}
+            className="h-full overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-slate-950/50 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 scrollbar-track-transparent"
+          >
           {loading ? (
             <div className="flex justify-center items-center h-full">
               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
             </div>
           ) : error ? (
             <div className="text-center text-red-400 my-4 bg-red-500/10 p-2 rounded-lg">{error}</div>
-          ) : messages.length === 0 ? (
+          ) : displayedMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-500 opacity-60">
               <span className="text-4xl mb-2">👋</span>
-              <p>No messages yet. Say hi!</p>
+              <p>{isSearchOpen && searchQuery ? "No matches found." : "No messages yet. Say hi!"}</p>
             </div>
           ) : (
-            messages.map((m, i) => (
+            displayedMessages.map((m, i) => (
               <div key={i} className={`flex ${m.sender === user._id ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[85%] md:max-w-md py-3 rounded-2xl shadow-md transition-all relative group ${
                   m.sender === user._id 
-                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none pl-5 pr-16" 
-                    : "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-bl-none pl-5 pr-10"
+                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none pl-5 pr-48" 
+                    : "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-bl-none pl-5 pr-36"
                 }`}>
                   {editingMessageId === m._id ? (
                     <div className="flex flex-col gap-2 min-w-[200px]">
                       <input
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
-                        className="w-full px-2 py-1 rounded text-slate-900 text-sm"
+                        className="w-full px-2 py-1 rounded bg-white text-slate-900 text-sm focus:outline-none"
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === "Enter") saveEdit();
@@ -378,46 +543,63 @@ const Chat = () => {
                         </div>
                       )}
 
-                      {m.sender === user._id && (
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                         <button 
-                          onClick={() => startEditing(m)}
-                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-white/70 hover:text-white transition-opacity p-1"
-                          title="Edit"
+                          onClick={() => togglePin(m._id)}
+                          className={`p-1 ${m.sender === user._id ? "text-white/70 hover:text-white" : "text-gray-400 hover:text-indigo-500"} transition-colors`}
+                          title={m.pinned ? "Unpin" : "Pin"}
                         >
-                          ✎
+                          {m.pinned ? "🚫" : "📌"}
                         </button>
-                      )}
-                      <button 
-                        onClick={() => setReplyingTo(m)}
-                        className={`absolute top-2 ${m.sender === user._id ? "right-8 text-white/70 hover:text-white" : "right-2 text-gray-400 hover:text-indigo-500"} opacity-0 group-hover:opacity-100 transition-opacity p-1 z-10`}
-                        title="Reply"
-                      >
-                        ↩️
-                      </button>
-                      <button 
-                        onClick={() => setShowReactionPickerId(showReactionPickerId === m._id ? null : m._id)}
-                        className={`absolute top-2 ${m.sender === user._id ? "right-14 text-white/70 hover:text-white" : "right-8 text-gray-400 hover:text-yellow-500"} opacity-0 group-hover:opacity-100 transition-opacity p-1 z-10`}
-                        title="Add Reaction"
-                      >
-                        ☺
-                      </button>
-                      <button 
-                        onClick={() => togglePin(m._id)}
-                        className={`absolute top-2 ${m.sender === user._id ? "right-20 text-white/70 hover:text-white" : "right-14 text-gray-400 hover:text-indigo-500"} opacity-0 group-hover:opacity-100 transition-opacity p-1 z-10`}
-                        title={m.pinned ? "Unpin" : "Pin"}
-                      >
-                        {m.pinned ? "🚫" : "📌"}
-                      </button>
+                        <button 
+                          onClick={() => setShowReactionPickerId(showReactionPickerId === m._id ? null : m._id)}
+                          className={`p-1 ${m.sender === user._id ? "text-white/70 hover:text-white" : "text-gray-400 hover:text-yellow-500"} transition-colors`}
+                          title="Add Reaction"
+                        >
+                          ☺
+                        </button>
+                        <button 
+                          onClick={() => setReplyingTo(m)}
+                          className={`p-1 ${m.sender === user._id ? "text-white/70 hover:text-white" : "text-gray-400 hover:text-indigo-500"} transition-colors`}
+                          title="Reply"
+                        >
+                          ↩️
+                        </button>
+                        {m.sender === user._id && (
+                          <button 
+                            onClick={() => startEditing(m)}
+                            className="p-1 text-white/70 hover:text-white transition-colors"
+                            title="Edit"
+                          >
+                            ✎
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => deleteMessageForMe(m._id)}
+                          className={`p-1 ${m.sender === user._id ? "text-white/70 hover:text-white" : "text-gray-400 hover:text-red-400"} transition-colors`}
+                          title="Delete for me"
+                        >
+                          {m.sender === user._id ? "✖️" : "🗑️"}
+                        </button>
+                        {m.sender === user._id && (
+                          <button 
+                            onClick={() => deleteMessage(m._id)}
+                            className="p-1 text-white/70 hover:text-red-400 transition-colors"
+                            title="Delete for everyone"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
 
                       {m.image && (
                         <img src={getAvatarUrl(m.image)} alt="attachment" className="rounded-lg mb-2 max-w-full max-h-60 object-cover" />
                       )}
-                      {m.text && (
-                        <p className="leading-relaxed">
-                          {m.text}
-                          {m.isEdited && <span className="text-[10px] opacity-70 ml-1 italic">(edited)</span>}
-                        </p>
-                      )}
+                      <MessageText 
+                        text={m.text} 
+                        isEdited={m.isEdited} 
+                        isOwnMessage={m.sender === user._id} 
+                      />
                       <p className={`text-[10px] mt-1 text-right ${m.sender === user._id ? "text-blue-200" : "text-gray-400"}`}>
                         {m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now"}
                         {m.sender === user._id && m.seen && <span className="ml-1 font-bold text-xs">✓✓</span>}
@@ -444,13 +626,28 @@ const Chat = () => {
             ))
           )}
           {isTyping && (
-            <div className="flex justify-start">
-              <div className="bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-4 py-2 rounded-2xl rounded-bl-none text-sm italic animate-pulse">
-                Typing...
+            <div className="flex justify-start mb-2 animate-fade-in">
+              <div className="bg-slate-200 dark:bg-slate-700 p-3 rounded-2xl rounded-bl-none flex items-center gap-1.5 w-fit shadow-sm">
+                <div className="w-1.5 h-1.5 bg-slate-500 dark:bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                <div className="w-1.5 h-1.5 bg-slate-500 dark:bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                <div className="w-1.5 h-1.5 bg-slate-500 dark:bg-slate-400 rounded-full animate-bounce"></div>
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
+        </div>
+
+          {showScrollBottom && (
+            <button
+              onClick={scrollToBottom}
+              className="absolute bottom-4 right-4 bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-full shadow-lg transition-all z-20 animate-bounce"
+              title="Scroll to bottom"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Input Area */}
