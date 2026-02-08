@@ -1,5 +1,5 @@
 import express from "express";
-import { getMessages, deleteChat, editMessage } from "../controllers/chat.controller.js";
+import { getMessages, deleteChat, editMessage, toggleReaction, togglePin } from "../controllers/chat.controller.js";
 import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -7,5 +7,7 @@ const router = express.Router();
 router.get("/:userId", protect, getMessages);
 router.delete("/:id", protect, deleteChat);
 router.put("/message/:messageId", protect, editMessage);
+router.put("/message/:messageId/reaction", protect, toggleReaction);
+router.put("/message/:messageId/pin", protect, togglePin);
 
 export default router;

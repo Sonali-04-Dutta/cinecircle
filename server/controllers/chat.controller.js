@@ -18,6 +18,35 @@ export const getMessages = async (req, res) => {
   }
 };
 
+// ❤️ Toggle Reaction
+export const toggleReaction = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) return res.status(404).json({ message: "Message not found" });
+
+    const existingReactionIndex = message.reactions.findIndex(
+      (r) => r.user.toString() === userId.toString() && r.emoji === emoji
+    );
+
+    if (existingReactionIndex > -1) {
+      message.reactions.splice(existingReactionIndex, 1);
+    } else {
+      message.reactions.push({ user: userId, emoji });
+    }
+
+    await message.save();
+    await message.populate("replyTo"); // Populate to ensure frontend reply UI doesn't break
+
+    res.json(message);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // 🗑️ Delete chat history
 export const deleteChat = async (req, res) => {
   try {
@@ -53,6 +82,29 @@ export const editMessage = async (req, res) => {
     message.text = text;
     message.isEdited = true;
     await message.save();
+
+    res.json(message);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 📌 Toggle Pin
+export const togglePin = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) return res.status(404).json({ message: "Message not found" });
+
+    if (message.sender.toString() !== userId.toString() && message.receiver.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    message.pinned = !message.pinned;
+    await message.save();
+    await message.populate("replyTo");
 
     res.json(message);
   } catch (error) {

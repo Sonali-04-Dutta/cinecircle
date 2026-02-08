@@ -16,6 +16,7 @@ const Chat = () => {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editText, setEditText] = useState("");
   const [replyingTo, setReplyingTo] = useState(null);
+  const [showReactionPickerId, setShowReactionPickerId] = useState(null);
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
@@ -23,6 +24,7 @@ const Chat = () => {
   const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -50,6 +52,13 @@ const Chat = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isTyping]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [text]);
 
   useEffect(() => {
     if (!socket) return;
@@ -108,6 +117,8 @@ const Chat = () => {
     socket.on("stopTyping", handleStopTyping);
     socket.on("messagesSeen", handleMessagesSeen);
     socket.on("messageUpdated", handleMessageUpdated);
+    socket.on("messageReactionUpdated", handleMessageUpdated); // Reuse update handler
+    socket.on("messagePinned", handleMessageUpdated); // Reuse update handler
     socket.on("userOnline", handleUserOnline);
     socket.on("userOffline", handleUserOffline);
 
@@ -117,6 +128,8 @@ const Chat = () => {
       socket.off("stopTyping", handleStopTyping);
       socket.off("messagesSeen", handleMessagesSeen);
       socket.off("messageUpdated", handleMessageUpdated);
+      socket.off("messageReactionUpdated", handleMessageUpdated);
+      socket.off("messagePinned", handleMessageUpdated);
       socket.off("userOnline", handleUserOnline);
       socket.off("userOffline", handleUserOffline);
     };
@@ -226,8 +239,38 @@ const Chat = () => {
     }
   };
 
+  const toggleReaction = async (msgId, emoji) => {
+    setShowReactionPickerId(null);
+
+    if (socket && socket.connected) {
+      socket.emit("toggleReaction", { messageId: msgId, userId: user._id, emoji });
+    } else {
+      try {
+        const res = await api.put(`/api/chat/message/${msgId}/reaction`, { emoji });
+        setMessages((prev) => prev.map((msg) => (msg._id === res.data._id ? res.data : msg)));
+      } catch (err) {
+        console.error("Failed to toggle reaction", err);
+        toast.error("Failed to update reaction");
+      }
+    }
+  };
+
+  const togglePin = async (msgId) => {
+    if (socket && socket.connected) {
+      socket.emit("togglePin", { messageId: msgId });
+    } else {
+      try {
+        const res = await api.put(`/api/chat/message/${msgId}/pin`);
+        setMessages((prev) => prev.map((msg) => (msg._id === res.data._id ? res.data : msg)));
+      } catch (err) {
+        console.error("Failed to toggle pin", err);
+        toast.error("Failed to update pin status");
+      }
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8 flex flex-col transition-all duration-500 ease-in-out">
+    <div className="h-[100dvh] bg-transparent text-slate-900 dark:text-slate-100 p-2 md:p-8 flex flex-col transition-all duration-500 ease-in-out overflow-hidden">
       <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden transition-all duration-500">
         
         {/* Header */}
@@ -315,6 +358,26 @@ const Chat = () => {
                         </div>
                       )}
 
+                      {showReactionPickerId === m._id && (
+                        <div className={`absolute -top-10 ${m.sender === user._id ? "right-0" : "left-0"} bg-white dark:bg-slate-800 shadow-xl rounded-full px-3 py-1.5 flex gap-2 z-20 border border-slate-200 dark:border-slate-700 animate-fade-in`}>
+                          {["👍", "❤️", "😂", "😮", "😢", "😡"].map(emoji => (
+                            <button 
+                              key={emoji} 
+                              onClick={() => toggleReaction(m._id, emoji)} 
+                              className={`hover:scale-125 transition-transform ${m.reactions?.some(r => r.user === user._id && r.emoji === emoji) ? "bg-blue-100 dark:bg-blue-900/30 rounded-full" : ""}`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {m.pinned && (
+                        <div className="absolute -left-2 -top-2 bg-yellow-500 text-white text-[10px] px-1.5 py-0.5 rounded-full shadow-sm z-20" title="Pinned Message">
+                          📌
+                        </div>
+                      )}
+
                       {m.sender === user._id && (
                         <button 
                           onClick={() => startEditing(m)}
@@ -326,10 +389,24 @@ const Chat = () => {
                       )}
                       <button 
                         onClick={() => setReplyingTo(m)}
-                        className={`absolute top-2 ${m.sender === user._id ? "right-8 text-white/70 hover:text-white" : "right-2 text-gray-400 hover:text-indigo-500"} opacity-0 group-hover:opacity-100 transition-opacity p-1`}
+                        className={`absolute top-2 ${m.sender === user._id ? "right-8 text-white/70 hover:text-white" : "right-2 text-gray-400 hover:text-indigo-500"} opacity-0 group-hover:opacity-100 transition-opacity p-1 z-10`}
                         title="Reply"
                       >
                         ↩️
+                      </button>
+                      <button 
+                        onClick={() => setShowReactionPickerId(showReactionPickerId === m._id ? null : m._id)}
+                        className={`absolute top-2 ${m.sender === user._id ? "right-14 text-white/70 hover:text-white" : "right-8 text-gray-400 hover:text-yellow-500"} opacity-0 group-hover:opacity-100 transition-opacity p-1 z-10`}
+                        title="Add Reaction"
+                      >
+                        ☺
+                      </button>
+                      <button 
+                        onClick={() => togglePin(m._id)}
+                        className={`absolute top-2 ${m.sender === user._id ? "right-20 text-white/70 hover:text-white" : "right-14 text-gray-400 hover:text-indigo-500"} opacity-0 group-hover:opacity-100 transition-opacity p-1 z-10`}
+                        title={m.pinned ? "Unpin" : "Pin"}
+                      >
+                        {m.pinned ? "🚫" : "📌"}
                       </button>
 
                       {m.image && (
@@ -345,6 +422,21 @@ const Chat = () => {
                         {m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now"}
                         {m.sender === user._id && m.seen && <span className="ml-1 font-bold text-xs">✓✓</span>}
                       </p>
+
+                      {m.reactions && m.reactions.length > 0 && (
+                        <div className={`flex flex-wrap gap-1 mt-1.5 ${m.sender === user._id ? "justify-end" : "justify-start"}`}>
+                          {Object.entries(
+                            m.reactions.reduce((acc, r) => {
+                              acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                              return acc;
+                            }, {})
+                          ).map(([emoji, count]) => (
+                            <span key={emoji} className="bg-white/40 dark:bg-black/20 text-[10px] px-1.5 py-0.5 rounded-full shadow-sm backdrop-blur-sm border border-white/10">
+                              {emoji} {count > 1 && count}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -362,7 +454,7 @@ const Chat = () => {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 bg-slate-100 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+        <div className="p-3 md:p-4 bg-slate-100 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
           {replyingTo && (
             <div className="mb-2 flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-lg border-l-4 border-indigo-500 shadow-sm">
               <div className="text-sm">
@@ -383,26 +475,36 @@ const Chat = () => {
               </button>
             </div>
           )}
-          <div className="flex gap-3">
-            <label className="cursor-pointer flex items-center justify-center text-gray-500 hover:text-indigo-500 transition-colors p-2">
+          <div className="flex gap-3 items-end">
+            <label className="cursor-pointer flex items-center justify-center text-gray-500 hover:text-indigo-500 transition-colors p-2 mb-1">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
                 <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
               </svg>
               <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
             </label>
-            <input
+            <textarea
+              ref={textareaRef}
               value={text}
               onChange={handleInputChange}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              rows={1}
               placeholder="Type a message..."
-              className="flex-1 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600 rounded-full px-5 py-3 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder-slate-400 dark:placeholder-slate-500"
+              className="flex-1 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600 rounded-2xl px-5 py-3 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder-slate-400 dark:placeholder-slate-500 resize-none overflow-hidden min-h-[48px] max-h-32"
             />
             <button 
               onClick={sendMessage} 
               disabled={!text.trim() && !image}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-full font-bold shadow-lg transition-all transform active:scale-95 flex items-center"
+              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 md:px-6 py-2 rounded-full font-bold shadow-lg transition-all transform active:scale-95 flex items-center justify-center mb-1 shrink-0"
             >
-              Send
+              <span className="hidden md:inline">Send</span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 md:hidden">
+                <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+              </svg>
             </button>
           </div>
         </div>

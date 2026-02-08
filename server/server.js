@@ -201,6 +201,54 @@ io.on("connection", (socket) => {
     }
   });
 
+  // ❤️ Toggle Reaction
+  socket.on("toggleReaction", async ({ messageId, userId, emoji }) => {
+    try {
+      const message = await Message.findById(messageId);
+      if (!message) return;
+
+      const existingReactionIndex = message.reactions.findIndex(
+        (r) => r.user.toString() === userId && r.emoji === emoji
+      );
+
+      if (existingReactionIndex > -1) {
+        message.reactions.splice(existingReactionIndex, 1);
+      } else {
+        message.reactions.push({ user: userId, emoji });
+      }
+
+      await message.save();
+
+      // Notify both parties
+      [message.sender, message.receiver].forEach(uid => {
+        const sock = onlineUsers[uid];
+        if (sock) io.to(sock).emit("messageReactionUpdated", message);
+      });
+    } catch (error) {
+      console.error("Error toggling reaction:", error);
+    }
+  });
+
+  // 📌 Toggle Pin
+  socket.on("togglePin", async ({ messageId }) => {
+    try {
+      const message = await Message.findById(messageId);
+      if (!message) return;
+
+      message.pinned = !message.pinned;
+      await message.save();
+      await message.populate("replyTo");
+
+      // Notify both parties
+      [message.sender, message.receiver].forEach(uid => {
+        const sock = onlineUsers[uid];
+        if (sock) io.to(sock).emit("messagePinned", message);
+      });
+    } catch (error) {
+      console.error("Error toggling pin:", error);
+    }
+  });
+
   // � Real-time Notifications
   socket.on("sendNotification", ({ recipientId, senderName, type, movieTitle }) => {
     const receiverSocket = onlineUsers[recipientId];
