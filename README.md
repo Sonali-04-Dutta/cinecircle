@@ -302,8 +302,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 👨‍💻 Author
 
 **Your Name**
-- GitHub: [@yourusername](https://github.com/yourusername)
-- LinkedIn: [Your LinkedIn](https://linkedin.com/in/yourprofile)
+- GitHub: (https://github.com/pratikdas018))
+- LinkedIn: (https://www.linkedin.com/in/pratik018)
 
 ---
 
@@ -318,7 +318,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📧 Support
 
-If you have any questions or run into issues, please open an issue on GitHub or contact [your.email@example.com](mailto:your.email@example.com).
+If you have any questions or run into issues, please open an issue on GitHub or contact Mail to : (cinecircle.co2026@gmail.com).
 
 ---
 
