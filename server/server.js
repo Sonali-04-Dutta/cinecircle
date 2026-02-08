@@ -4,6 +4,7 @@ import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
 import path from "path";
+import multer from "multer";
 import { fileURLToPath } from "url";
 
 import connectDB from "./config/db.js";
@@ -65,6 +66,23 @@ app.use("/api/streaming", streamingRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/notifications", notificationRoutes);
 
+// 📂 Multer Setup for Chat Images
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, "uploads"));
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
+  },
+});
+const upload = multer({ storage });
+
+// 📤 Chat Image Upload Route
+app.post("/api/chat/upload", upload.single("image"), (req, res) => {
+  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  res.json({ filePath: `/uploads/${req.file.filename}` });
+});
+
 // 🧪 Health Check Route
 app.get("/", (req, res) => {
   res.send("🎬 CineCircle API is running...");
@@ -91,16 +109,21 @@ io.on("connection", (socket) => {
   // User joins
   socket.on("addUser", (userId) => {
     onlineUsers[userId] = socket.id;
+    io.emit("userOnline", userId);
   });
 
   // Send message
-  socket.on("sendMessage", async ({ senderId, receiverId, text }) => {
+  socket.on("sendMessage", async ({ senderId, receiverId, text, image, replyTo }) => {
     try {
       const message = await Message.create({
         sender: senderId,
         receiver: receiverId,
         text,
+        image,
+        replyTo,
       });
+
+      await message.populate("replyTo");
 
       // Send to receiver if online
       const receiverSocket = onlineUsers[receiverId];
@@ -130,7 +153,55 @@ io.on("connection", (socket) => {
     }
   });
 
-  // 🔔 Real-time Notifications
+  // Check online status
+  socket.on("checkOnlineStatus", (userId, callback) => {
+    callback(!!onlineUsers[userId]);
+  });
+
+  // 👁️ Mark messages as seen
+  socket.on("markMessagesSeen", async ({ senderId, receiverId }) => {
+    try {
+      await Message.updateMany(
+        { sender: senderId, receiver: receiverId, seen: false },
+        { $set: { seen: true } }
+      );
+
+      const senderSocket = onlineUsers[senderId];
+      if (senderSocket) {
+        io.to(senderSocket).emit("messagesSeen", { senderId: receiverId });
+      }
+    } catch (error) {
+      console.error("Error marking messages as seen:", error);
+    }
+  });
+
+  // ✏️ Edit Message
+  socket.on("editMessage", async ({ messageId, newText }) => {
+    try {
+      const message = await Message.findById(messageId);
+      if (!message) return;
+
+      message.text = newText;
+      message.isEdited = true;
+      await message.save();
+
+      // Notify receiver
+      const receiverSocket = onlineUsers[message.receiver];
+      if (receiverSocket) {
+        io.to(receiverSocket).emit("messageUpdated", message);
+      }
+
+      // Notify sender (to update UI)
+      const senderSocket = onlineUsers[message.sender];
+      if (senderSocket) {
+        io.to(senderSocket).emit("messageUpdated", message);
+      }
+    } catch (error) {
+      console.error("Error editing message:", error);
+    }
+  });
+
+  // � Real-time Notifications
   socket.on("sendNotification", ({ recipientId, senderName, type, movieTitle }) => {
     const receiverSocket = onlineUsers[recipientId];
     if (receiverSocket) {
@@ -143,6 +214,7 @@ io.on("connection", (socket) => {
     console.log("🔴 User disconnected:", socket.id);
     for (const userId in onlineUsers) {
       if (onlineUsers[userId] === socket.id) {
+        io.emit("userOffline", userId);
         delete onlineUsers[userId];
       }
     }

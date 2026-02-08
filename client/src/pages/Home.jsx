@@ -65,6 +65,22 @@ const Home = () => {
     }
   }, [user]);
 
+  // 🔔 Listen for real-time notifications to play sound
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNotification = () => {
+      const audio = new Audio("/notification.mp3");
+      audio.play().catch(err => console.error("Error playing notification sound:", err));
+    };
+
+    socket.on("getNotification", handleNotification);
+
+    return () => {
+      socket.off("getNotification", handleNotification);
+    };
+  }, [socket]);
+
   // 🎬 Load initial movies to avoid a blank page
   useEffect(() => {
     const fetchInitialMovies = async () => {

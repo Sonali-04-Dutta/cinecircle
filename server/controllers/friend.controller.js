@@ -1,4 +1,5 @@
 import User from "../models/User.js";
+import Message from "../models/Message.js";
 
 export const addFriend = async (req, res) => {
   try {
@@ -33,7 +34,20 @@ export const addFriend = async (req, res) => {
 export const getFriends = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).populate("friends", "name email avatar");
-    res.status(200).json(user.friends);
+    
+    const friendsWithUnread = await Promise.all(
+      user.friends.map(async (friend) => {
+        if (!friend) return null;
+        const unreadCount = await Message.countDocuments({
+          sender: friend._id,
+          receiver: req.user._id,
+          seen: false,
+        });
+        return { ...friend.toObject(), unreadCount };
+      })
+    );
+
+    res.status(200).json(friendsWithUnread.filter((f) => f !== null));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

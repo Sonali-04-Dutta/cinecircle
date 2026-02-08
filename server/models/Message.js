@@ -14,7 +14,21 @@ const messageSchema = new mongoose.Schema(
     },
     text: {
       type: String,
-      required: true,
+    },
+    image: {
+      type: String,
+    },
+    seen: {
+      type: Boolean,
+      default: false,
+    },
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
     },
   },
   { timestamps: true }

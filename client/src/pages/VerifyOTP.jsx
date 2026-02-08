@@ -86,6 +86,8 @@ const VerifyOTP = () => {
       
       login(data);
       toast.success("Email verified! Welcome to CineCircle.");
+      const audio = new Audio("/login.mp3");
+      audio.play().catch(e => console.error("Login sound failed", e));
       navigate("/");
     } catch (error) {
       toast.error(error.response?.data?.message || "Verification failed");

@@ -188,6 +188,8 @@ const ReviewSection = ({ movieId, movieTitle, onReviewAdded, onStatsUpdate, filt
         return [res.data, ...prev];
       });
       if (onReviewAdded) onReviewAdded(res.data);
+      const audio = new Audio("/post.mp3");
+      audio.play().catch(e => console.error("Post sound failed", e));
       toast.success("Review posted successfully!");
     } catch (err) {
       setError("Failed to post review. Please try again.");
