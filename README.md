@@ -301,7 +301,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 👨‍💻 Author
 
-**Your Name**
+**Pratik Ch: Das**
+**Follow me on**
+
 - GitHub: (https://github.com/pratikdas018))
 - LinkedIn: (https://www.linkedin.com/in/pratik018)
 
