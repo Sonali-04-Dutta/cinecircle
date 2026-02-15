@@ -12,6 +12,32 @@ const generateToken = (id) => {
   });
 };
 
+const getInitialRole = (email) => {
+  const adminEmails = (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+
+  return adminEmails.includes(String(email).toLowerCase()) ? "admin" : "user";
+};
+
+const buildAuthPayload = (user) => ({
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  avatar: user.avatar || "",
+  role: user.role || "user",
+  token: generateToken(user._id),
+});
+
+const ensureAdminRoleFromEmail = async (user) => {
+  const shouldBeAdmin = getInitialRole(user.email) === "admin";
+  if (shouldBeAdmin && user.role !== "admin") {
+    user.role = "admin";
+    await user.save();
+  }
+};
+
 // REGISTER
 export const registerUser = async (req, res) => {
   try {
@@ -35,6 +61,7 @@ export const registerUser = async (req, res) => {
       name,
       email,
       password: hashedPassword,
+      role: getInitialRole(email),
       otp,
       otpExpires,
       isVerified: false,
@@ -66,14 +93,10 @@ export const verifyOTP = async (req, res) => {
     user.isVerified = true;
     user.otp = undefined;
     user.otpExpires = undefined;
+    await ensureAdminRoleFromEmail(user);
     await user.save();
 
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      token: generateToken(user._id),
-    });
+    res.json(buildAuthPayload(user));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -121,7 +144,8 @@ export const googleLogin = async (req, res) => {
         name,
         email,
         avatar,
-        googleId, 
+        googleId,
+        role: getInitialRole(email),
         isVerified: true, // Google users are pre-verified
       });
     } else if (!user.googleId) {
@@ -131,13 +155,9 @@ export const googleLogin = async (req, res) => {
       await user.save();
     }
 
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-      token: generateToken(user._id),
-    });
+    await ensureAdminRoleFromEmail(user);
+
+    res.json(buildAuthPayload(user));
   } catch (error) {
     res.status(400).json({ message: "Google authentication failed" });
   }
@@ -151,6 +171,10 @@ export const loginUser = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user)
       return res.status(400).json({ message: "Invalid credentials" });
+
+    if (!user.password) {
+      return res.status(400).json({ message: "Use Google sign-in for this account" });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
@@ -172,12 +196,8 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      token: generateToken(user._id),
-    });
+    await ensureAdminRoleFromEmail(user);
+    res.json(buildAuthPayload(user));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

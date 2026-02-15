@@ -162,6 +162,7 @@ STREAMING_API_KEY=your_streaming_api_key
 EMAIL_USER=your_email@gmail.com
 EMAIL_PASS=your_email_app_password
 CLIENT_URL=http://localhost:5173
+ADMIN_EMAILS=admin@example.com,owner@example.com
 ```
 
 ### 3. Setup Frontend

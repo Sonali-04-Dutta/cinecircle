@@ -4,10 +4,20 @@ import api from "../services/api";
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
+  const normalizeUser = (data) => {
+    if (!data || typeof data !== "object") return data;
+    return {
+      ...data,
+      role: data.role || "user",
+      avatar: data.avatar || "",
+    };
+  };
+
   const [user, setUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem("sceneit_user");
-      return savedUser ? JSON.parse(savedUser) : null;
+      const parsed = savedUser ? JSON.parse(savedUser) : null;
+      return normalizeUser(parsed);
     } catch (error) {
       console.error("Failed to parse user from localStorage", error);
       return null;
@@ -15,8 +25,9 @@ export const AuthProvider = ({ children }) => {
   });
 
   const login = (data) => {
-    localStorage.setItem("sceneit_user", JSON.stringify(data));
-    setUser(data);
+    const normalized = normalizeUser(data);
+    localStorage.setItem("sceneit_user", JSON.stringify(normalized));
+    setUser(normalized);
   };
 
   const loginWithGoogle = async (accessToken) => {
@@ -35,7 +46,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateUser = (data) => {
-    const updatedUser = { ...user, ...data };
+    const updatedUser = normalizeUser({ ...user, ...data });
     localStorage.setItem("sceneit_user", JSON.stringify(updatedUser));
     setUser(updatedUser);
   };

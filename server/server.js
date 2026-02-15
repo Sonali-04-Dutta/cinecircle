@@ -22,6 +22,7 @@ import startReminderJob from "./utils/scheduler.js";
 import streamingRoutes from "./routes/streaming.routes.js";
 import searchRoutes from "./routes/search.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -65,6 +66,7 @@ app.use("/api/reminders", reminderRoutes);
 app.use("/api/streaming", streamingRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/admin", adminRoutes);
 
 // 📂 Multer Setup for Chat Images
 const storage = multer.diskStorage({

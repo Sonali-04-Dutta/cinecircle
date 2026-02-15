@@ -1,6 +1,19 @@
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 
+const toSafeUser = (user) => ({
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  avatar: user.avatar || "",
+  role: user.role || "user",
+  isVerified: user.isVerified,
+  friends: user.friends || [],
+  friendRequests: user.friendRequests || [],
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+});
+
 // @desc    Get logged in user profile
 // @route   GET /api/users/profile
 // @access  Private
@@ -12,7 +25,7 @@ export const getUserProfile = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    res.json(user);
+    res.json(toSafeUser(user));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -29,7 +42,7 @@ export const getUserById = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    res.json(user);
+    res.json(toSafeUser(user));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -55,7 +68,7 @@ export const updateUserProfile = async (req, res) => {
 
       const updatedUser = await user.save();
 
-      res.json(updatedUser);
+      res.json(toSafeUser(updatedUser));
     } else {
       res.status(404).json({ message: "User not found" });
     }

@@ -42,8 +42,13 @@ const Navbar = () => {
 
   const navLinks = [
     { name: "Home", path: "/" },
-    { name: "Watchlist", path: "/watchlist" },
-    { name: "Friends", path: "/friends" },
+    ...(user
+      ? [
+          { name: "Watchlist", path: "/watchlist" },
+          { name: "Friends", path: "/friends" },
+          ...(user.role === "admin" ? [{ name: "Admin", path: "/admin" }] : []),
+        ]
+      : []),
   ];
 
   return (
@@ -150,9 +155,7 @@ const Navbar = () => {
       {/* Mobile menu */}
       <div className={`${isOpen ? "block" : "hidden"} md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 animate-fade-in`}>
         <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-          {navLinks
-            .filter(link => user || link.name === "Home") // Only show Home if not logged in
-            .map((link) => (
+          {navLinks.map((link) => (
               <NavLink
                 key={link.name}
                 to={link.path}

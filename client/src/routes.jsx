@@ -9,6 +9,7 @@ import Chat from "./pages/Chat";
 import Profile from "./pages/Profile";
 import Notifications from "./pages/Notifications";
 import VerifyOTP from "./pages/VerifyOTP";
+import Admin from "./pages/Admin";
 
 const AppRoutes = () => (
   <Routes>
@@ -22,6 +23,7 @@ const AppRoutes = () => (
     <Route path="/profile" element={<Profile />} />
     <Route path="/profile/:id" element={<Profile />} />
     <Route path="/notifications" element={<Notifications />} />
+    <Route path="/admin" element={<Admin />} />
     <Route path="/verify-otp" element={<VerifyOTP />} />
   </Routes>
 );
