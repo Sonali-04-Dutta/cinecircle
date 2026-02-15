@@ -1,20 +1,19 @@
-import axios from "axios";
+import { fetchProvidersByRegion } from "../utils/providerAvailability.js";
 
 export const getStreamingProviders = async (req, res) => {
   try {
     const movieId = req.params.id;
+    const region = (req.query.region || process.env.DEFAULT_REGION || "IN").toUpperCase();
 
-    const response = await axios.get(
-      `${process.env.TMDB_BASE_URL}/movie/${movieId}/watch/providers`,
-      {
-        params: {
-          api_key: process.env.TMDB_API_KEY,
-        },
-      }
-    );
+    const { providers, link, resolvedMovieId } = await fetchProvidersByRegion(movieId, region);
 
-    res.json(response.data.results);
+    return res.json({
+      region,
+      movieId: resolvedMovieId || movieId,
+      link,
+      providers,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };

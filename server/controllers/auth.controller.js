@@ -21,6 +21,18 @@ const getInitialRole = (email) => {
   return adminEmails.includes(String(email).toLowerCase()) ? "admin" : "user";
 };
 
+const isAdminEmail = (email) => getInitialRole(email) === "admin";
+
+const isAdminPasswordValid = (password) => {
+  const adminPass = process.env.ADMIN_PASS;
+  return Boolean(adminPass) && password === adminPass;
+};
+
+const adminNameFromEmail = (email) => {
+  const localPart = String(email || "").split("@")[0] || "admin";
+  return localPart.replace(/[._-]+/g, " ").trim() || "admin";
+};
+
 const buildAuthPayload = (user) => ({
   _id: user._id,
   name: user.name,
@@ -167,6 +179,40 @@ export const googleLogin = async (req, res) => {
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    if (isAdminEmail(email) && isAdminPasswordValid(password)) {
+      let adminUser = await User.findOne({ email });
+
+      if (!adminUser) {
+        adminUser = await User.create({
+          name: adminNameFromEmail(email),
+          email,
+          role: "admin",
+          isVerified: true,
+        });
+      } else {
+        let shouldSave = false;
+
+        if (adminUser.role !== "admin") {
+          adminUser.role = "admin";
+          shouldSave = true;
+        }
+        if (!adminUser.isVerified) {
+          adminUser.isVerified = true;
+          shouldSave = true;
+        }
+        if (!adminUser.name) {
+          adminUser.name = adminNameFromEmail(email);
+          shouldSave = true;
+        }
+
+        if (shouldSave) {
+          await adminUser.save();
+        }
+      }
+
+      return res.json(buildAuthPayload(adminUser));
+    }
 
     const user = await User.findOne({ email });
     if (!user)

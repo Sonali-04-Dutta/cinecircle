@@ -1,39 +1,78 @@
-import { useEffect, useState } from "react";
-import axios from "axios";
+import { useEffect, useMemo, useState } from "react";
+import api from "../../services/api";
+import { toast } from "react-hot-toast";
 
-const StreamingProviders = ({ movieId }) => {
-  const [providers, setProviders] = useState(null);
+const StreamingProviders = ({ movieId, movieTitle }) => {
+  const region = (import.meta.env.VITE_DEFAULT_REGION || "IN").toUpperCase();
+  const [providers, setProviders] = useState([]);
+  const [providerLink, setProviderLink] = useState("");
+  const [loadingProviderId, setLoadingProviderId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchProviders = async () => {
       try {
-        const res = await axios.get(
-          `${import.meta.env.VITE_API_BASE_URL}/api/streaming/${movieId}`
-        );
-
-        // Change "IN" to your target country code if needed
-        setProviders(res.data.IN || null);
+        setIsLoading(true);
+        const res = await api.get(`/api/streaming/${movieId}?region=${region}`);
+        setProviders(res.data.providers || []);
+        setProviderLink(res.data.link || "");
       } catch (err) {
         console.error("Error fetching streaming providers", err);
+        setProviders([]);
+        setProviderLink("");
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchProviders();
-  }, [movieId]);
+  }, [movieId, region]);
 
-  if (!providers) return <p className="text-gray-400 mt-4">No streaming info available.</p>;
+  const groupedProviders = useMemo(() => {
+    const map = new Map();
+    providers.forEach((provider) => {
+      map.set(provider.provider_id, provider);
+    });
+    return [...map.values()];
+  }, [providers]);
 
-  const renderSection = (title, items) => {
-    if (!items) return null;
+  const createAlert = async (provider) => {
+    try {
+      setLoadingProviderId(provider.provider_id);
+      await api.post("/api/availability-alerts", {
+        movieId,
+        movieTitle,
+        providerName: provider.provider_name,
+        providerId: provider.provider_id,
+        region,
+      });
+      toast.success(`Alert created for ${provider.provider_name}`);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to create alert");
+    } finally {
+      setLoadingProviderId(null);
+    }
+  };
 
-    return (
-      <div className="mb-4">
-        <h3 className="text-lg font-semibold mb-2">{title}</h3>
-        <div className="flex flex-wrap gap-4">
-          {items.map((provider) => (
+  if (isLoading) {
+    return <p className="text-slate-500 mt-4">Loading streaming providers...</p>;
+  }
+
+  if (!groupedProviders.length) {
+    return <p className="text-slate-500 mt-4">No streaming info available for region {region}.</p>;
+  }
+
+  return (
+    <div className="mt-6 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+      <h2 className="text-xl font-bold mb-3">Where to Watch ({region})</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        {groupedProviders.map((provider) => (
+          <div
+            key={provider.provider_id}
+            className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-slate-50 dark:bg-slate-950/40"
+          >
             <a
-              key={provider.provider_id}
-              href={providers.link}
+              href={providerLink || "#"}
               target="_blank"
               rel="noopener noreferrer"
               className="flex flex-col items-center hover:scale-105 transition"
@@ -43,23 +82,19 @@ const StreamingProviders = ({ movieId }) => {
                 alt={provider.provider_name}
                 className="w-14 h-14 rounded-lg shadow-md"
               />
-              <span className="text-xs mt-1 text-center">
-                {provider.provider_name}
-              </span>
+              <span className="text-xs mt-2 text-center font-semibold">{provider.provider_name}</span>
             </a>
-          ))}
-        </div>
+
+            <button
+              onClick={() => createAlert(provider)}
+              disabled={loadingProviderId === provider.provider_id}
+              className="mt-3 w-full text-xs bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white py-1.5 rounded-lg"
+            >
+              {loadingProviderId === provider.provider_id ? "Saving..." : "Alert me"}
+            </button>
+          </div>
+        ))}
       </div>
-    );
-  };
-
-  return (
-    <div className="mt-6 bg-gray-900 p-4 rounded-xl">
-      <h2 className="text-xl font-bold mb-3">📺 Where to Watch</h2>
-
-      {renderSection("🎟 Stream", providers.flatrate)}
-      {renderSection("💰 Rent", providers.rent)}
-      {renderSection("🛒 Buy", providers.buy)}
     </div>
   );
 };

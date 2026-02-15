@@ -4,6 +4,8 @@ import Message from "../models/Message.js";
 import Reminder from "../models/Reminder.js";
 import Watchlist from "../models/Watchlist.js";
 import Notification from "../models/Notification.js";
+import Club from "../models/Club.js";
+import AvailabilityAlert from "../models/AvailabilityAlert.js";
 
 const buildDateDaysAgo = (days) => {
   const date = new Date();
@@ -21,6 +23,8 @@ export const getAdminStats = async (req, res) => {
       messages,
       reminders,
       watchlistItems,
+      clubs,
+      availabilityAlerts,
       newUsersLast7Days,
       newReviewsLast7Days,
     ] = await Promise.all([
@@ -29,6 +33,8 @@ export const getAdminStats = async (req, res) => {
       Message.countDocuments(),
       Reminder.countDocuments(),
       Watchlist.countDocuments(),
+      Club.countDocuments(),
+      AvailabilityAlert.countDocuments(),
       User.countDocuments({ createdAt: { $gte: since } }),
       Review.countDocuments({ createdAt: { $gte: since } }),
     ]);
@@ -39,6 +45,8 @@ export const getAdminStats = async (req, res) => {
       messages,
       reminders,
       watchlistItems,
+      clubs,
+      availabilityAlerts,
       newUsersLast7Days,
       newReviewsLast7Days,
     });
@@ -133,8 +141,19 @@ export const deleteUserAdmin = async (req, res) => {
       Review.deleteMany({ user: userId }),
       Watchlist.deleteMany({ user: userId }),
       Reminder.deleteMany({ user: userId }),
+      AvailabilityAlert.deleteMany({ user: userId }),
       Notification.deleteMany({ $or: [{ recipient: userId }, { sender: userId }] }),
       Message.deleteMany({ $or: [{ sender: userId }, { receiver: userId }] }),
+      Club.updateMany(
+        {},
+        {
+          $pull: {
+            members: userId,
+            "watchlist.$[].votes": userId,
+          },
+        }
+      ),
+      Club.deleteMany({ owner: userId }),
       User.updateMany(
         {},
         {

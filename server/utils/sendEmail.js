@@ -65,3 +65,38 @@ export const sendReminderEmail = async (to, movieTitle) => {
     console.error("Reminder email sending failed:", error.response?.data || error.message);
   }
 };
+
+export const sendAvailabilityEmail = async (to, movieTitle, providerName, link = "") => {
+  try {
+    if (!process.env.EMAIL_PASS || !process.env.EMAIL_FROM) return;
+
+    await axios.post(
+      "https://api.brevo.com/v3/smtp/email",
+      {
+        sender: { name: "CineCircle Support", email: process.env.EMAIL_FROM },
+        to: [{ email: to }],
+        subject: `Now Streaming: ${movieTitle} on ${providerName}`,
+        htmlContent: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px;">
+          <h2 style="color: #333;">Availability Alert</h2>
+          <p><strong>${movieTitle}</strong> is now available on <strong>${providerName}</strong>.</p>
+          ${
+            link
+              ? `<p><a href="${link}" target="_blank" style="color:#2563eb;">Open provider link</a></p>`
+              : ""
+          }
+          <p>Enjoy your movie night!</p>
+        </div>
+      `,
+      },
+      {
+        headers: {
+          "api-key": process.env.EMAIL_PASS,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  } catch (error) {
+    console.error("Availability email sending failed:", error.response?.data || error.message);
+  }
+};

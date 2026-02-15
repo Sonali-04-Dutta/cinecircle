@@ -23,6 +23,8 @@ import streamingRoutes from "./routes/streaming.routes.js";
 import searchRoutes from "./routes/search.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import clubRoutes from "./routes/club.routes.js";
+import availabilityAlertRoutes from "./routes/availabilityAlert.routes.js";
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -67,6 +69,8 @@ app.use("/api/streaming", streamingRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/clubs", clubRoutes);
+app.use("/api/availability-alerts", availabilityAlertRoutes);
 
 // 📂 Multer Setup for Chat Images
 const storage = multer.diskStorage({

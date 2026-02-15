@@ -180,6 +180,8 @@ const MovieDetails = () => {
             )}
 
             <p className="text-slate-700 dark:text-slate-300 text-lg leading-relaxed mb-6">{movie.Plot}</p>
+
+            <StreamingProviders movieId={movie.imdbID || id} movieTitle={movie.Title} />
             
             {movie.Actors && (
               <div className="mt-8">

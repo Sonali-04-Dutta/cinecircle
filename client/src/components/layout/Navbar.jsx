@@ -45,6 +45,8 @@ const Navbar = () => {
     ...(user
       ? [
           { name: "Watchlist", path: "/watchlist" },
+          { name: "Clubs", path: "/clubs" },
+          { name: "Alerts", path: "/alerts" },
           { name: "Friends", path: "/friends" },
           ...(user.role === "admin" ? [{ name: "Admin", path: "/admin" }] : []),
         ]

@@ -11,6 +11,8 @@ const defaultStats = {
   messages: 0,
   reminders: 0,
   watchlistItems: 0,
+  clubs: 0,
+  availabilityAlerts: 0,
   newUsersLast7Days: 0,
   newReviewsLast7Days: 0,
 };
@@ -129,6 +131,8 @@ const Admin = () => {
     { label: "Total Messages", value: stats.messages },
     { label: "Total Reminders", value: stats.reminders },
     { label: "Watchlist Items", value: stats.watchlistItems },
+    { label: "Movie Clubs", value: stats.clubs },
+    { label: "Availability Alerts", value: stats.availabilityAlerts },
     { label: "Users (7 days)", value: stats.newUsersLast7Days },
     { label: "Reviews (7 days)", value: stats.newReviewsLast7Days },
   ];

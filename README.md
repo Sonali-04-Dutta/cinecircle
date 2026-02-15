@@ -158,11 +158,14 @@ PORT=5000
 MONGODB_URI=your_mongodb_connection_string
 JWT_SECRET=your_jwt_secret_key
 TMDB_API_KEY=your_tmdb_api_key
+TMDB_BASE_URL=https://api.themoviedb.org/3
 STREAMING_API_KEY=your_streaming_api_key
 EMAIL_USER=your_email@gmail.com
 EMAIL_PASS=your_email_app_password
 CLIENT_URL=http://localhost:5173
 ADMIN_EMAILS=admin@example.com,owner@example.com
+ADMIN_PASS=your_secure_admin_password
+DEFAULT_REGION=IN
 ```
 
 ### 3. Setup Frontend
@@ -176,6 +179,7 @@ Create a `.env` file in the client directory:
 ```env
 VITE_API_URL=http://localhost:5000
 VITE_SOCKET_URL=http://localhost:5000
+VITE_DEFAULT_REGION=IN
 ```
 
 ### 4. Run the Application
@@ -247,6 +251,19 @@ The application will be available at:
 - `POST /api/reviews` - Create review
 - `PUT /api/reviews/:id` - Update review
 - `DELETE /api/reviews/:id` - Delete review
+
+### Movie Clubs
+- `POST /api/clubs` - Create a club
+- `GET /api/clubs` - Get my clubs
+- `GET /api/clubs/:id` - Get club details
+- `POST /api/clubs/:id/watchlist` - Add movie to shared watchlist
+- `POST /api/clubs/:id/watchlist/:movieId/vote` - Vote/unvote movie
+- `POST /api/clubs/:id/next-movie-night/select` - Finalize next movie night
+
+### Availability Alerts
+- `POST /api/availability-alerts` - Create OTT availability alert
+- `GET /api/availability-alerts` - Get my alerts
+- `DELETE /api/availability-alerts/:id` - Remove alert
 
 ---
 

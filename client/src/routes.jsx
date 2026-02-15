@@ -10,6 +10,8 @@ import Profile from "./pages/Profile";
 import Notifications from "./pages/Notifications";
 import VerifyOTP from "./pages/VerifyOTP";
 import Admin from "./pages/Admin";
+import Clubs from "./pages/Clubs";
+import AvailabilityAlerts from "./pages/AvailabilityAlerts";
 
 const AppRoutes = () => (
   <Routes>
@@ -18,6 +20,8 @@ const AppRoutes = () => (
     <Route path="/login" element={<Login />} />
     <Route path="/register" element={<Register />} />
     <Route path="/watchlist" element={<Watchlist />} />
+    <Route path="/clubs" element={<Clubs />} />
+    <Route path="/alerts" element={<AvailabilityAlerts />} />
     <Route path="/friends" element={<Friends />} />
     <Route path="/chat/:id" element={<Chat />} />
     <Route path="/profile" element={<Profile />} />
