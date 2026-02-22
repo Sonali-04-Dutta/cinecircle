@@ -322,8 +322,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 **Pratik Ch: Das**
 **Follow me on**
 
-- GitHub: (https://github.com/pratikdas018))
-- LinkedIn: (https://www.linkedin.com/in/pratik018)
+- GitHub: (https://github.com/Sonali-04-Dutta)
+- LinkedIn: (https://www.linkedin.com/in/sonu12)
 
 ---
 
